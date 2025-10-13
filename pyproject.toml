@@ -1,0 +1,43 @@
+[project]
+name = "coretact"
+dynamic = ["version"]
+requires-python = ">=3.12"
+dependencies = [
+  "discord.py",
+  "aiohttp",
+  "datafiles",
+  "loguru",
+  "sentry-sdk",
+]
+
+[project.scripts]
+coretact = "coretact:main"
+
+[dependency-groups]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "pytest-cov",
+  "black",
+  "isort",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--tb=short",
+    "--strict-markers",
+    "--cov=coretact",
+    "--cov-report=term-missing",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[build-system]
+requires = ["setuptools>=80", "setuptools-scm[simple]>=8"]
+build-backend = "setuptools.build_meta"
