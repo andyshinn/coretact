@@ -2,6 +2,10 @@
 
 A Discord bot and API for managing meshcore contact advertisements.
 
+## Vibe Coded
+
+This is a vibe-coding project. Here be dragons!
+
 ## Features
 
 - **Discord Bot**: Manage your meshcore contact advertisements via slash commands

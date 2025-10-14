@@ -1,47 +1,61 @@
 """
 MeshCore Advertisement Parser
 
-Parses meshcore:// URLs containing advertisement data.
-Supports two formats:
+Parses meshcore:// URLs containing signed advertisement data.
 
-1. Contact Export Format (from CMD_EXPORT_CONTACT):
-   - Byte 0: Format version/type (often 0x11)
-   - Byte 1: Reserved (0x00)
-   - Bytes 2-34: Public key (32 bytes)
-   - Bytes 34-111: Other data (flags, paths, etc.)
-   - Bytes 111-124: Name (null-padded, 13+ bytes)
+Format (based on meshcore.js):
 
-2. Advertisement Broadcast Format:
-   - Byte 0: Flags/Type byte
-     - Bits 0-3: Advertisement type
-     - Bit 4 (0x10): Location data present
-     - Bit 5 (0x20): Feature 1 present
-     - Bit 6 (0x40): Feature 2 present
-     - Bit 7 (0x80): Name present
-   - Optional fields based on flags
+Packet Header (2 bytes):
+  - Byte 0: Header byte
+    - Bits 0-1: Route type
+    - Bits 2-5: Payload type (4 = Node Advertisement)
+    - Bits 6-7: Version
+  - Byte 1: Path length
 
-This parser primarily handles the Contact Export Format which is what
-users will be sharing as meshcore:// URLs.
+Path (variable, usually 0 bytes)
+
+Advertisement Payload:
+  - Public key (32 bytes)
+  - Timestamp (4 bytes, uint32 little-endian)
+  - Signature (64 bytes, Ed25519)
+  - App data (variable):
+    - Byte 0: Flags
+      - Bits 0-3: Advertisement type (0=None, 1=Chat/Companion, 2=Repeater, 3=Room)
+      - Bit 4 (0x10): Location present
+      - Bit 5 (0x20): Battery present
+      - Bit 6 (0x40): Temperature present
+      - Bit 7 (0x80): Name present
+    - Latitude (4 bytes, int32 LE) [if flag 0x10 set]
+    - Longitude (4 bytes, int32 LE) [if flag 0x10 set]
+    - Battery (2 bytes, uint16 LE, millivolts) [if flag 0x20 set]
+    - Temperature (2 bytes, int16 LE, celsius * 100) [if flag 0x40 set]
+    - Name (remaining bytes, UTF-8 string) [if flag 0x80 set]
 """
 
 import struct
 from dataclasses import dataclass
 from typing import Optional
 
+from nacl.signing import VerifyKey
+from nacl.exceptions import BadSignatureError
 
-# Advertisement type constants
+
+# Advertisement type constants (from meshcore.js)
 ADV_TYPE_NONE = 0
 ADV_TYPE_CHAT = 1  # Also called "Companion"
 ADV_TYPE_REPEATER = 2
 ADV_TYPE_ROOM = 3
-ADV_TYPE_SENSOR = 4
+ADV_TYPE_SENSOR = 4  # Sensor node
 
-# Flag masks (for broadcast format)
-ADV_LATLON_MASK = 0x10  # Bit 4: Location present
-ADV_FEAT1_MASK = 0x20  # Bit 5: Feature 1 present
-ADV_FEAT2_MASK = 0x40  # Bit 6: Feature 2 present
+# Flag masks (from meshcore.js Advert class)
+ADV_LATLON_MASK = 0x10  # Bit 4: Location (lat/lon) present
+ADV_BATTERY_MASK = 0x20  # Bit 5: Battery voltage present
+ADV_TEMPERATURE_MASK = 0x40  # Bit 6: Temperature present
 ADV_NAME_MASK = 0x80  # Bit 7: Name present
 ADV_TYPE_MASK = 0x0F  # Bits 0-3: Type
+
+# Packet constants
+PACKET_PAYLOAD_TYPE_ADVERTISEMENT = 4
 
 
 @dataclass
@@ -57,23 +71,87 @@ class ParsedAdvert:
     format_type: str  # "contact_export" or "broadcast"
 
     # Core fields
-    public_key: Optional[str] = None  # Only in contact export format
+    public_key: Optional[str] = None  # 32-byte public key (hex string)
     adv_type: Optional[int] = None  # Advertisement type (0-15)
     type_name: Optional[str] = None  # Human-readable type name
-    flags: Optional[int] = None  # Flags from contact export
+    flags: Optional[int] = None  # Flags byte from app data
     name: Optional[str] = None  # Device/contact name
 
-    # Location (contact export format)
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    # Signature and timestamp (from advertisement packet)
+    timestamp: Optional[int] = None  # Unix timestamp from packet
+    signature: Optional[str] = None  # 64-byte Ed25519 signature (hex string)
 
-    # Timestamps (contact export format)
-    last_advert: Optional[int] = None  # Unix timestamp
-    last_modified: Optional[int] = None  # Unix timestamp
+    # Location
+    latitude: Optional[float] = None  # Latitude in degrees
+    longitude: Optional[float] = None  # Longitude in degrees
 
-    # Path information (contact export format)
-    out_path: Optional[str] = None
-    out_path_len: Optional[int] = None
+    # Sensor data
+    battery: Optional[int] = None  # Battery voltage in millivolts
+    temperature: Optional[float] = None  # Temperature in Celsius
+
+    def verify_signature(self) -> bool:
+        """
+        Verify the Ed25519 signature of this advertisement.
+
+        The signature covers: public_key + timestamp + app_data
+        (This matches the meshcore.js Advert.isVerified() implementation)
+
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        if not self.public_key or not self.signature or self.timestamp is None:
+            return False
+
+        try:
+            # Convert hex strings to bytes
+            public_key_bytes = bytes.fromhex(self.public_key)
+            signature_bytes = bytes.fromhex(self.signature)
+
+            # Build the signed message (matches meshcore.js)
+            # signed_data = public_key + timestamp + app_data
+            timestamp_bytes = struct.pack("<I", self.timestamp)
+
+            # Reconstruct app data from parsed fields
+            app_data = self._reconstruct_app_data()
+
+            message = public_key_bytes + timestamp_bytes + app_data
+
+            # Verify signature using PyNaCl
+            verify_key = VerifyKey(public_key_bytes)
+            verify_key.verify(message, signature_bytes)
+            return True
+
+        except (BadSignatureError, ValueError):
+            return False
+
+    def _reconstruct_app_data(self) -> bytes:
+        """
+        Reconstruct the app data bytes from parsed fields.
+
+        This is needed for signature verification.
+        """
+        if self.flags is None:
+            return b""
+
+        app_data = bytes([self.flags])
+
+        # Add optional fields in order
+        if self.flags & ADV_LATLON_MASK and self.latitude is not None and self.longitude is not None:
+            lat_raw = int(self.latitude * 1e6)
+            lon_raw = int(self.longitude * 1e6)
+            app_data += struct.pack("<ii", lat_raw, lon_raw)
+
+        if self.flags & ADV_BATTERY_MASK and self.battery is not None:
+            app_data += struct.pack("<H", self.battery)
+
+        if self.flags & ADV_TEMPERATURE_MASK and self.temperature is not None:
+            temp_raw = int(self.temperature * 100)
+            app_data += struct.pack("<h", temp_raw)
+
+        if self.flags & ADV_NAME_MASK and self.name is not None:
+            app_data += self.name.encode("utf-8")
+
+        return app_data
 
 
 class AdvertParser:
@@ -83,7 +161,7 @@ class AdvertParser:
 
     TYPE_NAMES = {
         ADV_TYPE_NONE: "None",
-        ADV_TYPE_CHAT: "Companion",
+        ADV_TYPE_CHAT: "Chat",  # meshcore.js uses "CHAT"
         ADV_TYPE_REPEATER: "Repeater",
         ADV_TYPE_ROOM: "Room",
         ADV_TYPE_SENSOR: "Sensor",
@@ -133,213 +211,143 @@ class AdvertParser:
 
     @classmethod
     def _parse_bytes(cls, advert_string: str, raw_hex: str, data: bytes) -> ParsedAdvert:
-        """Parse the raw bytes into advertisement fields."""
+        """
+        Parse the raw bytes into advertisement fields.
 
-        # Detect format based on length and structure
-        # Contact export format is typically 123-148 bytes with public key at offset 2-34
-        # Broadcast format is much shorter (typically < 50 bytes)
+        Only supports the signed advertisement packet format (payload type 4).
+        """
 
-        if len(data) >= 123 and data[1] == 0x00:
-            # Likely contact export format
-            return cls._parse_contact_export(advert_string, raw_hex, data)
-        else:
-            # Likely broadcast format
-            return cls._parse_broadcast(advert_string, raw_hex, data)
+        if len(data) < 2:
+            raise ValueError("Data too short for packet header")
+
+        # Check packet header
+        # Byte 0: header with payload type in bits 2-5
+        header = data[0]
+        payload_type = (header >> 2) & 0x0F
+
+        # Only accept Advertisement packets (payload type 4)
+        if payload_type != PACKET_PAYLOAD_TYPE_ADVERTISEMENT:
+            raise ValueError(
+                f"Invalid packet type: expected payload_type=4 (Advertisement), "
+                f"got payload_type={payload_type}"
+            )
+
+        if len(data) < 100:
+            raise ValueError(
+                f"Advertisement packet too short: {len(data)} bytes "
+                f"(minimum 100 bytes required)"
+            )
+
+        return cls._parse_advertisement_packet(advert_string, raw_hex, data)
 
     @classmethod
-    def _parse_contact_export(cls, advert_string: str, raw_hex: str, data: bytes) -> ParsedAdvert:
+    def _parse_advertisement_packet(cls, advert_string: str, raw_hex: str, data: bytes) -> ParsedAdvert:
         """
-        Parse contact export format.
+        Parse modern advertisement packet format (based on meshcore.js).
 
-        The meshcore:// export format has a 2-byte header, then the standard CONTACT packet:
-        - Byte 0: Format version (often 0x11)
-        - Byte 1: Reserved (0x00)
-
-        Then follows the standard CONTACT packet format (meshcore_py offsets are relative to packet start):
-        - Bytes 2-33: Public key (32 bytes) [meshcore_py offset 1-33]
-        - Byte 34: Type [meshcore_py offset 33]
-        - Byte 35: Flags [meshcore_py offset 34]
-        - Byte 36: Out path length (signed byte) [meshcore_py offset 35]
-        - Bytes 37-100: Out path (64 bytes) [meshcore_py offset 36-99]
-        - Bytes 101-132: Name (32 bytes, null-terminated) [meshcore_py offset 100-131]
-        - Bytes 133-136: Last advert timestamp (uint32, little-endian) [meshcore_py offset 132-135]
-        - Bytes 137-140: Latitude * 1E6 (int32, little-endian) [meshcore_py offset 136-139]
-        - Bytes 141-144: Longitude * 1E6 (int32, little-endian) [meshcore_py offset 140-143]
-        - Bytes 145-148: Last modified timestamp (uint32, little-endian) [meshcore_py offset 144-147]
+        Structure:
+          - Packet header (2 bytes)
+          - Path (variable length, specified in header byte 1)
+          - Public key (32 bytes)
+          - Timestamp (4 bytes, uint32 LE)
+          - Signature (64 bytes)
+          - App data (flags + optional fields)
         """
 
-        if len(data) < 111:  # Minimum for headers + public key + type + name start
-            raise ValueError(f"Contact export data too short: {len(data)} bytes (expected >= 111)")
+        # Parse packet header
+        header = data[0]
+        path_len = data[1]
 
-        # Parse 2-byte header
-        version_byte = data[0]  # noqa: F841
-        reserved = data[1]  # noqa: F841
+        # Skip path (if any) to get to payload
+        payload_offset = 2 + path_len
 
-        # CONTACT packet data starts at byte 2
-        # meshcore_py format (with code byte stripped):
-        #   offset 1-33: public_key (32 bytes)
-        #   offset 33: type
-        #   offset 34: flags
-        #   ... etc
-        # Maps to our buffer starting at byte 2:
-        #   data[2:34]: public_key (32 bytes)
-        #   data[34]: type
-        #   data[35]: flags
-        #   ... etc
+        if len(data) < payload_offset + 100:  # 32 + 4 + 64 = 100 minimum
+            raise ValueError(
+                f"Packet too short for advertisement payload: {len(data)} bytes "
+                f"(need at least {payload_offset + 100})"
+            )
 
-        offset = 2  # Start of CONTACT packet data (after 2-byte header)
+        payload = data[payload_offset:]
 
-        # Parse public key (32 bytes from offset to offset+32)
-        public_key = data[offset : offset + 32].hex()
+        # Parse advertisement payload
+        offset = 0
 
-        # Parse type (at offset+32)
-        adv_type = data[offset + 32] if len(data) > offset + 32 else 0
-        type_name = cls.TYPE_NAMES.get(adv_type, f"Unknown({adv_type})")
+        # Public key (32 bytes)
+        public_key = payload[offset : offset + 32].hex()
+        offset += 32
 
-        # Parse flags (at offset+33)
-        flags = data[offset + 33] if len(data) > offset + 33 else 0
+        # Timestamp (4 bytes, uint32 LE)
+        timestamp = struct.unpack("<I", payload[offset : offset + 4])[0]
+        offset += 4
 
-        # Parse out_path_len (at offset+34, signed)
-        out_path_len = struct.unpack("b", bytes([data[offset + 34]]))[0] if len(data) > offset + 34 else -1
-        if out_path_len == -1:
-            out_path_len = 0
+        # Signature (64 bytes)
+        signature = payload[offset : offset + 64].hex()
+        offset += 64
 
-        # Parse out_path (starts at offset+35, up to out_path_len bytes)
-        out_path = None
-        if len(data) > offset + 35 and out_path_len > 0:
-            out_path = data[offset + 35 : offset + 35 + out_path_len].hex()
+        # App data starts here
+        if len(payload) < offset + 1:
+            raise ValueError("No app data present in advertisement")
 
-        # Parse name (32 bytes at offset+99 to offset+131, null-terminated/null-padded)
-        # meshcore_py offset 100-131 maps to our offset+99 to offset+131
-        # Note: name may be null-padded at the beginning or end
-        name = None
-        if len(data) > offset + 99:
-            name_bytes = data[offset + 99 : min(offset + 131, len(data))]
-            # Decode the full field and strip all null bytes and whitespace
-            name = name_bytes.decode("utf-8", errors="ignore").replace("\x00", "").strip()
-            if not name:  # If empty after cleaning, set to None
-                name = None
+        app_data = payload[offset:]
 
-        # Parse timestamps and location
-        # meshcore_py offset 132-135: last_advert -> our offset+131 to offset+135
-        last_advert = None
-        last_modified = None
-        latitude = None
-        longitude = None
-
-        if len(data) >= offset + 135:
-            last_advert = struct.unpack("<I", data[offset + 131 : offset + 135])[0]
-
-        if len(data) >= offset + 143:
-            lat_raw = struct.unpack("<i", data[offset + 135 : offset + 139])[0]
-            lon_raw = struct.unpack("<i", data[offset + 139 : offset + 143])[0]
-            latitude = lat_raw / 1e6
-            longitude = lon_raw / 1e6
-
-        if len(data) >= offset + 147:
-            last_modified = struct.unpack("<I", data[offset + 143 : offset + 147])[0]
-
-        return ParsedAdvert(
-            advert_string=advert_string,
-            raw_hex=raw_hex,
-            raw_bytes=data,
-            format_type="contact_export",
-            public_key=public_key,
-            adv_type=adv_type,
-            type_name=type_name,
-            flags=flags,
-            name=name,
-            latitude=latitude,
-            longitude=longitude,
-            last_advert=last_advert,
-            last_modified=last_modified,
-            out_path=out_path,
-            out_path_len=out_path_len,
-        )
-
-    @classmethod
-    def _parse_broadcast(cls, advert_string: str, raw_hex: str, data: bytes) -> ParsedAdvert:
-        """
-        Parse broadcast advertisement format.
-
-        Format:
-        - Byte 0: Flags/Type
-        - Optional location (8 bytes)
-        - Optional feature1 (2 bytes)
-        - Optional feature2 (2 bytes)
-        - Optional name (variable, null-terminated)
-        """
-
-        # Parse flags byte
-        flags = data[0]
+        # Parse app data
+        flags = app_data[0]
         adv_type = flags & ADV_TYPE_MASK
         type_name = cls.TYPE_NAMES.get(adv_type, f"Unknown({adv_type})")
 
-        # Check which optional fields are present
-        has_location = bool(flags & ADV_LATLON_MASK)
-        has_feature1 = bool(flags & ADV_FEAT1_MASK)
-        has_feature2 = bool(flags & ADV_FEAT2_MASK)
-        has_name = bool(flags & ADV_NAME_MASK)
+        app_offset = 1
 
-        # Start parsing after flags byte
-        offset = 1
-
-        # Parse optional fields
+        # Parse optional fields based on flags
         latitude = None
         longitude = None
-
-        # Parse location (8 bytes: lat + lon)
-        if has_location:
-            if offset + 8 > len(data):
+        if flags & ADV_LATLON_MASK:
+            if len(app_data) < app_offset + 8:
                 raise ValueError("Not enough data for location field")
+            lat_raw = struct.unpack("<i", app_data[app_offset : app_offset + 4])[0]
+            lon_raw = struct.unpack("<i", app_data[app_offset + 4 : app_offset + 8])[0]
+            latitude = lat_raw / 1e6
+            longitude = lon_raw / 1e6
+            app_offset += 8
 
-            lat_bytes = data[offset : offset + 4]
-            lon_bytes = data[offset + 4 : offset + 8]
+        battery = None
+        if flags & ADV_BATTERY_MASK:
+            if len(app_data) < app_offset + 2:
+                raise ValueError("Not enough data for battery field")
+            battery = struct.unpack("<H", app_data[app_offset : app_offset + 2])[0]
+            app_offset += 2
 
-            # Convert bytes to signed int32 (little-endian) and scale
-            latitude = struct.unpack("<i", lat_bytes)[0] / 1e6
-            longitude = struct.unpack("<i", lon_bytes)[0] / 1e6
+        temperature = None
+        if flags & ADV_TEMPERATURE_MASK:
+            if len(app_data) < app_offset + 2:
+                raise ValueError("Not enough data for temperature field")
+            temp_raw = struct.unpack("<h", app_data[app_offset : app_offset + 2])[0]
+            temperature = temp_raw / 100.0
+            app_offset += 2
 
-            offset += 8
-
-        # Parse feature 1 (2 bytes, little-endian)
-        if has_feature1:
-            if offset + 2 > len(data):
-                raise ValueError("Not enough data for feature1 field")
-            offset += 2
-
-        # Parse feature 2 (2 bytes, little-endian)
-        if has_feature2:
-            if offset + 2 > len(data):
-                raise ValueError("Not enough data for feature2 field")
-            offset += 2
-
-        # Parse name (null-terminated string)
         name = None
-        if has_name:
-            if offset >= len(data):
-                raise ValueError("Not enough data for name field")
-
-            name_bytes = data[offset:]
-
-            # Find null terminator
-            null_pos = name_bytes.find(b"\x00")
-            if null_pos != -1:
-                name_bytes = name_bytes[:null_pos]
-
-            name = name_bytes.decode("utf-8", errors="ignore").strip()
+        if flags & ADV_NAME_MASK:
+            if len(app_data) > app_offset:
+                name_bytes = app_data[app_offset:]
+                name = name_bytes.decode("utf-8", errors="ignore").rstrip("\x00").strip()
+                if not name:
+                    name = None
 
         return ParsedAdvert(
             advert_string=advert_string,
             raw_hex=raw_hex,
             raw_bytes=data,
-            format_type="broadcast",
+            format_type="advertisement",
+            public_key=public_key,
+            timestamp=timestamp,
+            signature=signature,
             adv_type=adv_type,
             type_name=type_name,
             flags=flags,
             name=name,
             latitude=latitude,
             longitude=longitude,
+            battery=battery,
+            temperature=temperature,
         )
 
     @classmethod

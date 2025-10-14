@@ -22,13 +22,13 @@ def temp_storage_dir():
 
 @pytest.fixture
 def sample_meshcore_url():
-    """Sample meshcore URL for testing."""
-    # Real contact export from egrme.sh (full version from parser tests)
+    """Sample meshcore URL for testing with valid location (Austin, TX)."""
+    # Real contact export from egrme.sh with valid coordinates
     return (
         "meshcore://110055365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d"
-        "5045ec6872ee07b881c8a3ab5e25e62430cdb8bbb4b7b415e0a208084424942f1b26dcdd"
-        "315c9eccf86d81bbf960642c4c1e385ec5ab1a98471e4134006e0ef5b715120c91000000"
-        "00000000006567726d652e736820436f7265"
+        "f2d9ee68a9d311a998dd4e3ebea8a03432539e0a5c35dfe94f7a0c8665181e70d17ddef51"
+        "b7b5f2704a6fdd2fde47d3edf2057cfb3a874df8d394ac494ed646173fcdb0a91f7fccc01"
+        "e4462cfa6567726d652e736820436f7265"
     )
 
 
@@ -44,9 +44,16 @@ def test_create_advert_from_url(temp_storage_dir, sample_meshcore_url):
     assert advert.discord_server_id == "123456789"
     assert advert.discord_user_id == "987654321"
     assert advert.advert_string == sample_meshcore_url
-    assert advert.radio_type == 80  # Raw type byte from Contact Export format
+    assert advert.radio_type == 1  # Type 1 = Chat/Companion
     assert advert.name == "egrme.sh Core"
-    assert advert.flags == 69  # Raw flags byte
+    assert advert.flags == 145  # 0x91 = type 1 + location flag + name flag
+
+    # Check location (Austin, TX)
+    assert advert.latitude is not None
+    assert advert.longitude is not None
+    assert abs(advert.latitude - 30.211319) < 0.000001
+    assert abs(advert.longitude - (-97.761564)) < 0.000001
+
     assert isinstance(advert.created_at, float)
     assert isinstance(advert.updated_at, float)
     assert advert.created_at > 0

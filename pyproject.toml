@@ -8,6 +8,7 @@ dependencies = [
   "datafiles",
   "loguru",
   "sentry-sdk",
+  "pynacl>=1.6.0",
 ]
 
 [project.scripts]

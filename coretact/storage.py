@@ -41,7 +41,7 @@ class AdvertStorage:
             flags=parsed.flags,
             latitude=parsed.latitude,
             longitude=parsed.longitude,
-            out_path=parsed.out_path,
+            out_path="",  # No longer used in modern advertisement format
             created_at=time(),
             updated_at=time(),
         )

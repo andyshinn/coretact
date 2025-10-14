@@ -620,6 +620,58 @@ class CoretactCog(commands.GroupCog, name="coretact"):
             f"Info displayed for guild {interaction.guild_id}: {total_adverts} adverts, {len(unique_users)} users"
         )
 
+    @app_commands.checks.has_role(CORETACT_ADMIN_ROLE)
+    @app_commands.command(name="refresh-meshes", description="[Admin] Update mesh information for all servers")
+    async def refresh_meshes(self, interaction: Interaction):
+        """Update mesh metadata for all joined Discord servers.
+
+        This command is useful for updating servers that joined before mesh tracking
+        was implemented, or for manually refreshing server information.
+
+        Requires the Coretact Admin role.
+
+        Args:
+            interaction: Discord interaction
+        """
+        await interaction.response.defer(ephemeral=True)
+
+        updated_count = 0
+        error_count = 0
+
+        # Get the bot instance to access _create_or_update_mesh
+        bot = self.bot
+
+        # Iterate through all guilds the bot is in
+        for guild in bot.guilds:
+            try:
+                # Call the bot's _create_or_update_mesh method
+                if hasattr(bot, '_create_or_update_mesh'):
+                    await bot._create_or_update_mesh(guild)
+                    updated_count += 1
+                    logger.info(f"Refreshed mesh for guild {guild.id}: {guild.name}")
+            except Exception as e:
+                error_count += 1
+                logger.error(f"Failed to refresh mesh for guild {guild.id}: {e}")
+
+        # Create response embed
+        embed = Embed(
+            title="Mesh Refresh Complete",
+            description=f"Updated mesh information for {updated_count} server(s)",
+            color=0x00FF00 if error_count == 0 else 0xFFAA00,
+        )
+
+        embed.add_field(name="Total Servers", value=str(len(bot.guilds)), inline=True)
+        embed.add_field(name="Successfully Updated", value=str(updated_count), inline=True)
+
+        if error_count > 0:
+            embed.add_field(name="Errors", value=str(error_count), inline=True)
+            embed.set_footer(text="Check logs for error details")
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        logger.info(
+            f"Mesh refresh completed by user {interaction.user.id}: {updated_count} updated, {error_count} errors"
+        )
+
     @staticmethod
     def _type_to_string(type_id: int) -> str:
         """Convert device type ID to human-readable string.
