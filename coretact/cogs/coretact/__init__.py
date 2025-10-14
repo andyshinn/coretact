@@ -6,9 +6,104 @@ from typing import Literal, Optional
 
 from discord import Embed, File, Interaction, app_commands
 from discord.ext import commands
+from discord.utils import get
 
 from coretact.log import logger
 from coretact.storage import AdvertStorage, ContactConverter, ContactFilter
+
+# Role name constant
+CORETACT_ADMIN_ROLE = "Coretact Admin"
+
+
+def is_coretact_admin(interaction: Interaction) -> bool:
+    """Check if user has the Coretact Admin role.
+
+    Args:
+        interaction: Discord interaction
+
+    Returns:
+        True if user has Coretact Admin role, False otherwise
+    """
+    if not interaction.guild:
+        return False
+
+    # interaction.user should be a Member in guild context, but check to be safe
+    if not hasattr(interaction.user, "roles"):
+        return False
+
+    coretact_admin_role = get(interaction.guild.roles, name=CORETACT_ADMIN_ROLE)
+    has_admin_role = bool(coretact_admin_role and coretact_admin_role in interaction.user.roles)  # type: ignore[attr-defined]
+    logger.debug(f"User {interaction.user} has admin role: {has_admin_role}")
+    return has_admin_role
+
+
+def check_advert_owner(interaction: Interaction) -> bool:
+    """Check if the user owns the specified advert.
+
+    Extracts the public_key parameter from the interaction data and checks
+    if the user owns that advert.
+
+    Args:
+        interaction: Discord interaction
+
+    Returns:
+        True if user owns the advert, False otherwise
+    """
+    # Extract public_key from interaction options
+    public_key = None
+    if "options" in interaction.data:
+        for option in interaction.data["options"]:
+            if option["name"] == "public_key":
+                public_key = option.get("value")
+                break
+
+    if not public_key or not interaction.guild_id:
+        return False
+
+    # Ensure public_key is a string and normalize to lowercase
+    if not isinstance(public_key, str):
+        return False
+    public_key = public_key.lower()
+
+    # Use AdvertStorage to fetch the advert
+    storage = AdvertStorage()
+    advert = storage.get_advert(
+        public_key=public_key,
+        discord_server_id=str(interaction.guild_id),
+    )
+
+    if not advert:
+        return False
+
+    # Check if user owns this advert
+    return str(interaction.user.id) == advert.discord_user_id
+
+
+def is_coretact_admin_or_owner(interaction: Interaction) -> bool:
+    """Check if user is either a Coretact admin or owns the advert.
+
+    Extracts the public_key from the interaction and checks if the user
+    is either an admin or the owner of that advert.
+
+    Args:
+        interaction: Discord interaction
+
+    Returns:
+        True if user is admin or owns the advert, False otherwise
+    """
+    # Check admin role first (more efficient)
+    if is_coretact_admin(interaction):
+        logger.debug(f"User {interaction.user} has Coretact Admin role")
+        return True
+
+    # If not admin, check if they own the specific advert
+    try:
+        is_owner = check_advert_owner(interaction)
+        logger.debug(f"User {interaction.user} advert ownership check: {is_owner}")
+        return is_owner
+    except Exception as e:
+        logger.warning(f"Error checking advert ownership: {e}")
+        return False
 
 
 class CoretactCog(commands.GroupCog, name="coretact"):
@@ -70,15 +165,14 @@ class CoretactCog(commands.GroupCog, name="coretact"):
                 discord_user_id=str(interaction.user.id),
             )
 
-            # Check if this advert already exists
+            # Check if this advert already exists (by server and public key only)
             existing = self.storage.get_advert(
                 public_key=advert.public_key,
                 discord_server_id=str(interaction.guild_id),
-                discord_user_id=str(interaction.user.id),
             )
 
             if existing:
-                # Update existing advert
+                # Update existing advert (keep the same user)
                 self.storage.update_advert(existing, meshcore_url)
                 existing.datafile.save()
                 action = "updated"
@@ -96,7 +190,7 @@ class CoretactCog(commands.GroupCog, name="coretact"):
             embed.add_field(name="Name", value=advert.name, inline=True)
             embed.add_field(
                 name="Type",
-                value=self._type_to_string(advert.type),
+                value=self._type_to_string(advert.radio_type),
                 inline=True,
             )
             embed.add_field(
@@ -179,7 +273,7 @@ class CoretactCog(commands.GroupCog, name="coretact"):
 
         for advert in adverts[:25]:  # Discord embed field limit
             field_value = (
-                f"**Type:** {self._type_to_string(advert.type)}\n"
+                f"**Type:** {self._type_to_string(advert.radio_type)}\n"
                 f"**Key:** `{advert.public_key}`\n"
                 f"**Updated:** <t:{int(advert.updated_at)}:R>"
             )
@@ -195,62 +289,56 @@ class CoretactCog(commands.GroupCog, name="coretact"):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         logger.info(f"Listed {len(adverts)} adverts for user {target_user_id} in guild {interaction.guild_id}")
 
-    @app_commands.command(name="remove", description="Remove one of your meshcore contact advertisements")
-    @app_commands.describe(public_key="The public key of the advertisement to remove (first 8+ characters)")
+
+    @app_commands.check(is_coretact_admin_or_owner)
+    @app_commands.command(name="remove", description="Remove a meshcore contact advertisement")
+    @app_commands.describe(public_key="The full public key of the advertisement to remove (64 characters)")
     async def remove_advert(self, interaction: Interaction, public_key: str):
         """Remove a meshcore contact advertisement.
 
+        Users can remove their own adverts. Users with the Coretact Admin role can remove any advert.
+
         Args:
             interaction: Discord interaction
-            public_key: Public key prefix to remove (minimum 8 characters)
+            public_key: Full public key to remove (must be exact 64-character key)
         """
-        # Validate public key length
-        if len(public_key) < 8:
-            await interaction.response.send_message(
-                "Please provide at least the first 8 characters of the public key.",
-                ephemeral=True,
-            )
-            return
-
         # Normalize to lowercase
         public_key = public_key.lower()
 
-        # Get user's adverts
-        adverts = self.storage.list_user_adverts(
+        # Ensure we're in a guild
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "This command can only be used in a server.",
+                ephemeral=True,
+            )
+            return
+
+        # Get the advert by exact public key match
+        # The @app_commands.check decorator ensures only owners/admins can delete
+        advert = self.storage.get_advert(
+            public_key=public_key,
             discord_server_id=str(interaction.guild_id),
-            discord_user_id=str(interaction.user.id),
         )
 
-        # Find matching advert
-        matching = [advert for advert in adverts if advert.public_key.startswith(public_key)]
-
-        if not matching:
+        if not advert:
             await interaction.response.send_message(
-                f"No advertisement found with public key starting with `{public_key}`.",
+                f"No advertisement found with public key `{public_key}`.",
                 ephemeral=True,
             )
             return
 
-        if len(matching) > 1:
-            await interaction.response.send_message(
-                f"Multiple advertisements match that prefix. Please provide more characters.\n"
-                f"Matching keys: {', '.join([f'`{a.public_key}`' for a in matching])}",
-                ephemeral=True,
-            )
-            return
+        # Permission check is handled by @app_commands.check decorator
 
         # Delete the advert
-        advert = matching[0]
         success = self.storage.delete_advert(
             public_key=advert.public_key,
             discord_server_id=str(interaction.guild_id),
-            discord_user_id=str(interaction.user.id),
         )
 
         if success:
             embed = Embed(
                 title="Advertisement removed",
-                description=f"Your advertisement for **{advert.name}** has been removed.",
+                description=f"Advertisement for **{advert.name}** has been removed.",
                 color=0xFF9900,
             )
             embed.add_field(
@@ -260,14 +348,15 @@ class CoretactCog(commands.GroupCog, name="coretact"):
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.info(
-                f"Advert removed by user {interaction.user.id} in guild {interaction.guild_id}: {advert.public_key}"
+                f"Advert removed by user {interaction.user.id} in guild {interaction.guild_id}: "
+                f"{advert.public_key} (owner={advert.discord_user_id})"
             )
         else:
             await interaction.response.send_message(
                 "Failed to remove advertisement. Please try again.",
                 ephemeral=True,
             )
-            logger.error(f"Failed to delete advert {advert.public_key} for user {interaction.user.id}")
+            logger.error(f"Failed to delete advert {advert.public_key} for user {advert.discord_user_id}")
 
     @app_commands.command(name="search", description="Search meshcore contact advertisements in this server")
     @app_commands.describe(
@@ -345,14 +434,16 @@ class CoretactCog(commands.GroupCog, name="coretact"):
             filter_desc.append(f"User: <@{user_id}>")
 
         embed = Embed(
-            title=f"Search Results",
-            description=f"Found {len(filtered_adverts)} advertisement(s)\n" + " | ".join(filter_desc) if filter_desc else f"Found {len(filtered_adverts)} advertisement(s)",
+            title="Search Results",
+            description=f"Found {len(filtered_adverts)} advertisement(s)\n" + " | ".join(filter_desc)
+            if filter_desc
+            else f"Found {len(filtered_adverts)} advertisement(s)",
             color=0x00FF00,
         )
 
         for advert in filtered_adverts[:25]:  # Discord embed field limit
             field_value = (
-                f"**Type:** {self._type_to_string(advert.type)}\n"
+                f"**Type:** {self._type_to_string(advert.radio_type)}\n"
                 f"**Key:** `{advert.public_key}`\n"
                 f"**User:** <@{advert.discord_user_id}>\n"
                 f"**Updated:** <t:{int(advert.updated_at)}:R>"
@@ -367,7 +458,9 @@ class CoretactCog(commands.GroupCog, name="coretact"):
             embed.set_footer(text=f"Showing first 25 of {len(filtered_adverts)} advertisements")
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        logger.info(f"Search returned {len(filtered_adverts)} results for user {interaction.user.id} in guild {interaction.guild_id}")
+        logger.info(
+            f"Search returned {len(filtered_adverts)} results for user {interaction.user.id} in guild {interaction.guild_id}"
+        )
 
     @app_commands.command(name="download", description="Download contacts as a JSON file")
     @app_commands.describe(
@@ -501,7 +594,7 @@ class CoretactCog(commands.GroupCog, name="coretact"):
             last_updated = max(last_updated, advert.updated_at)
 
             # Count by type (using the raw type values from the advert)
-            type_str = self._type_to_string(advert.type).lower()
+            type_str = self._type_to_string(advert.radio_type).lower()
             if type_str in by_type:
                 by_type[type_str] += 1
             else:
@@ -509,7 +602,7 @@ class CoretactCog(commands.GroupCog, name="coretact"):
 
         # Create response embed
         embed = Embed(
-            title=f"📊 Contact Statistics",
+            title="📊 Contact Statistics",
             description=f"Statistics for {interaction.guild.name}",
             color=0x5865F2,
         )
@@ -523,7 +616,9 @@ class CoretactCog(commands.GroupCog, name="coretact"):
         embed.add_field(name="By Type", value=type_breakdown or "No data", inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        logger.info(f"Info displayed for guild {interaction.guild_id}: {total_adverts} adverts, {len(unique_users)} users")
+        logger.info(
+            f"Info displayed for guild {interaction.guild_id}: {total_adverts} adverts, {len(unique_users)} users"
+        )
 
     @staticmethod
     def _type_to_string(type_id: int) -> str:

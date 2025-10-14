@@ -1,15 +1,11 @@
 """Tests for the Web API."""
 
-import json
 from time import time
 
-import pytest
-from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
 
 from coretact.api.server import create_app
 from coretact.models import Advert
-from coretact.storage import AdvertStorage
 
 
 class TestWebAPI(AioHTTPTestCase):
@@ -40,14 +36,13 @@ class TestWebAPI(AioHTTPTestCase):
     async def test_mesh_contacts_with_data(self):
         """Test getting contacts with data."""
         # Create test adverts
-        storage = self.app["storage"]
 
         advert1 = Advert(
             discord_server_id="test_server",
             discord_user_id="user1",
             public_key="a" * 64,
             advert_string="meshcore://test1",
-            type=1,
+            radio_type=1,
             name="Test Device 1",
             flags=0,
             latitude=0.0,
@@ -63,7 +58,7 @@ class TestWebAPI(AioHTTPTestCase):
             discord_user_id="user2",
             public_key="b" * 64,
             advert_string="meshcore://test2",
-            type=2,
+            radio_type=2,
             name="Test Device 2",
             flags=0,
             latitude=1.0,
@@ -119,7 +114,7 @@ class TestWebAPI(AioHTTPTestCase):
             discord_user_id="user1",
             public_key="c" * 64,
             advert_string="meshcore://test3",
-            type=1,
+            radio_type=1,
             name="Test Device 3",
             flags=0,
             latitude=0.0,
@@ -157,7 +152,7 @@ class TestWebAPI(AioHTTPTestCase):
             discord_user_id="user1",
             public_key="e" * 64,
             advert_string="meshcore://test4",
-            type=1,
+            radio_type=1,
             name="Test Device 4",
             flags=0,
             latitude=0.0,
@@ -173,7 +168,7 @@ class TestWebAPI(AioHTTPTestCase):
             discord_user_id="user2",
             public_key="f" * 64,
             advert_string="meshcore://test5",
-            type=2,
+            radio_type=2,
             name="Test Device 5",
             flags=0,
             latitude=0.0,
@@ -233,7 +228,7 @@ class TestWebAPI(AioHTTPTestCase):
             discord_user_id="user1",
             public_key="g" * 64,
             advert_string="meshcore://test6",
-            type=1,
+            radio_type=1,
             name="Test Device 6",
             flags=0,
             latitude=0.0,
@@ -249,7 +244,7 @@ class TestWebAPI(AioHTTPTestCase):
             discord_user_id="user1",
             public_key="h" * 64,
             advert_string="meshcore://test7",
-            type=2,
+            radio_type=2,
             name="Test Device 7",
             flags=0,
             latitude=0.0,
@@ -288,7 +283,7 @@ class TestWebAPI(AioHTTPTestCase):
             discord_user_id="user1",
             public_key="i" * 64,
             advert_string="meshcore://test8",
-            type=1,
+            radio_type=1,
             name="Test Device 8",
             flags=0,
             latitude=0.0,
@@ -304,7 +299,7 @@ class TestWebAPI(AioHTTPTestCase):
             discord_user_id="user2",
             public_key="j" * 64,
             advert_string="meshcore://test9",
-            type=2,
+            radio_type=2,
             name="Test Device 9",
             flags=0,
             latitude=0.0,

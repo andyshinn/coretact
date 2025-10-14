@@ -1,7 +1,6 @@
 """Pytest configuration for Coretact tests."""
 
 import os
-import tempfile
 
 import datafiles
 import pytest
@@ -20,9 +19,9 @@ def clean_storage():
     """Clean up storage directory after each test."""
     yield
     # Clean up any test files created in the actual storage directory
-    storage_path = os.path.join(os.path.dirname(__file__), '..', 'storage')
+    storage_path = os.path.join(os.path.dirname(__file__), "..", "storage")
     if os.path.exists(storage_path):
         for root, dirs, files in os.walk(storage_path):
             for file in files:
-                if file.endswith('.json'):
+                if file.endswith(".json"):
                     os.remove(os.path.join(root, file))

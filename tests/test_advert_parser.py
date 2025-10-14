@@ -13,14 +13,14 @@ class TestContactExportFormat:
 
     # Real contact export from egrme.sh
     VALID_CONTACT_EXPORT = (
-        'meshcore://110055365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d6608'
-        '7d5045ec6872ee07b881c8a3ab5e25e62430cdb8bbb4b7b415e0a208084424942f1b26dc'
-        'dd315c9eccf86d81bbf960642c4c1e385ec5ab1a98471e4134006e0ef5b715120c910000'
-        '0000000000006567726d652e736820436f7265'
+        "meshcore://110055365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d6608"
+        "7d5045ec6872ee07b881c8a3ab5e25e62430cdb8bbb4b7b415e0a208084424942f1b26dc"
+        "dd315c9eccf86d81bbf960642c4c1e385ec5ab1a98471e4134006e0ef5b715120c910000"
+        "0000000000006567726d652e736820436f7265"
     )
 
-    EXPECTED_PUBLIC_KEY = '55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d'
-    EXPECTED_NAME = 'egrme.sh Core'
+    EXPECTED_PUBLIC_KEY = "55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d"
+    EXPECTED_NAME = "egrme.sh Core"
 
     def test_parse_valid_contact_export(self):
         """Test parsing a valid contact export URL."""
@@ -48,8 +48,8 @@ class TestContactExportFormat:
         """Test extracting type and flags."""
         parsed = AdvertParser.parse(self.VALID_CONTACT_EXPORT)
 
-        assert parsed.type is not None
-        assert isinstance(parsed.type, int)
+        assert parsed.adv_type is not None
+        assert isinstance(parsed.adv_type, int)
         assert parsed.flags is not None
         assert isinstance(parsed.flags, int)
 
@@ -75,7 +75,7 @@ class TestContactExportFormat:
         parsed = AdvertParser.parse(self.VALID_CONTACT_EXPORT)
 
         assert parsed.advert_string == self.VALID_CONTACT_EXPORT
-        assert parsed.raw_hex == self.VALID_CONTACT_EXPORT.replace('meshcore://', '')
+        assert parsed.raw_hex == self.VALID_CONTACT_EXPORT.replace("meshcore://", "")
         assert len(parsed.raw_bytes) > 0
 
 
@@ -84,11 +84,11 @@ class TestBroadcastFormat:
 
     # Example broadcast format with location and name
     BROADCAST_WITH_LOCATION = (
-        'meshcore://91'  # Type 1 (companion) with location and name flags
-        '00000000'  # Latitude (0.0)
-        '00000000'  # Longitude (0.0)
-        '54657374'  # Name: "Test"
-        '00'        # Null terminator
+        "meshcore://91"  # Type 1 (companion) with location and name flags
+        "00000000"  # Latitude (0.0)
+        "00000000"  # Longitude (0.0)
+        "54657374"  # Name: "Test"
+        "00"  # Null terminator
     )
 
     def test_parse_broadcast_format(self):
@@ -96,7 +96,7 @@ class TestBroadcastFormat:
         parsed = AdvertParser.parse(self.BROADCAST_WITH_LOCATION)
 
         assert parsed.format_type == "broadcast"
-        assert parsed.type == 1  # Companion
+        assert parsed.adv_type == 1  # Companion
         assert parsed.latitude is not None
         assert parsed.name is not None
 
@@ -165,36 +165,36 @@ class TestEdgeCases:
         # Header (2 bytes) + public key (32 bytes) + minimal contact data (89 bytes)
         # Total must be >= 123 bytes to be detected as contact_export
         minimal = (
-            'meshcore://1100'  # Header (2 bytes)
-            + '00' * 32         # Public key (32 bytes)
-            + '00' * 89         # Minimal contact data (89 bytes) = 123 total
+            "meshcore://1100"  # Header (2 bytes)
+            + "00" * 32  # Public key (32 bytes)
+            + "00" * 89  # Minimal contact data (89 bytes) = 123 total
         )
 
         parsed = AdvertParser.parse(minimal)
         assert parsed.format_type == "contact_export"
-        assert parsed.public_key == '00' * 32
+        assert parsed.public_key == "00" * 32
 
     def test_contact_export_with_no_name(self):
         """Test contact export where name field is all null bytes."""
         # This should handle gracefully
         no_name = (
-            'meshcore://1100'
-            + '11' * 32  # Public key
-            + '01'       # Type
-            + '00'       # Flags
-            + 'FF'       # path_len = -1
-            + '00' * 64  # Out path
-            + '00' * 32  # Name (all nulls)
+            "meshcore://1100"
+            + "11" * 32  # Public key
+            + "01"  # Type
+            + "00"  # Flags
+            + "FF"  # path_len = -1
+            + "00" * 64  # Out path
+            + "00" * 32  # Name (all nulls)
         )
 
         parsed = AdvertParser.parse(no_name)
-        assert parsed.name is None or parsed.name == ''
+        assert parsed.name is None or parsed.name == ""
 
     def test_case_insensitive_hex(self):
         """Test that hex parsing is case-insensitive."""
-        lower = 'meshcore://1100' + 'aa' * 32 + '00' * 77
-        upper = 'meshcore://1100' + 'AA' * 32 + '00' * 77
-        mixed = 'meshcore://1100' + 'Aa' * 32 + '00' * 77
+        lower = "meshcore://1100" + "aa" * 32 + "00" * 77
+        upper = "meshcore://1100" + "AA" * 32 + "00" * 77
+        mixed = "meshcore://1100" + "Aa" * 32 + "00" * 77
 
         parsed_lower = AdvertParser.parse(lower)
         parsed_upper = AdvertParser.parse(upper)
@@ -211,27 +211,27 @@ class TestDataTypes:
         """Test that public key is returned as lowercase hex string."""
         # Must be >= 123 bytes to be contact_export format
         # Header (2) + Public key (32) + padding (89) = 123 bytes
-        url = 'meshcore://1100' + 'ABCD' * 16 + '00' * 89  # 16 * 2 = 32 bytes for pubkey
+        url = "meshcore://1100" + "ABCD" * 16 + "00" * 89  # 16 * 2 = 32 bytes for pubkey
         parsed = AdvertParser.parse(url)
 
         assert parsed.public_key is not None
         assert parsed.public_key.islower()
-        assert all(c in '0123456789abcdef' for c in parsed.public_key)
+        assert all(c in "0123456789abcdef" for c in parsed.public_key)
 
     def test_location_data_types(self):
         """Test that location fields are floats when present."""
         # Contact export with location data
         with_location = (
-            'meshcore://1100'
-            + '00' * 32  # Public key
-            + '01'       # Type
-            + '00'       # Flags
-            + 'FF'       # path_len
-            + '00' * 64  # Out path
-            + '00' * 32  # Name
-            + '00' * 4    # last_advert
-            + 'E8030000'  # Latitude (1000 * 1E6 = 0.001)
-            + 'E8030000'  # Longitude
+            "meshcore://1100"
+            + "00" * 32  # Public key
+            + "01"  # Type
+            + "00"  # Flags
+            + "FF"  # path_len
+            + "00" * 64  # Out path
+            + "00" * 32  # Name
+            + "00" * 4  # last_advert
+            + "E8030000"  # Latitude (1000 * 1E6 = 0.001)
+            + "E8030000"  # Longitude
         )
 
         parsed = AdvertParser.parse(with_location)
@@ -243,16 +243,16 @@ class TestDataTypes:
     def test_timestamp_data_types(self):
         """Test that timestamp fields are integers when present."""
         with_timestamps = (
-            'meshcore://1100'
-            + '00' * 32  # Public key
-            + '01'       # Type
-            + '00'       # Flags
-            + 'FF'        # path_len
-            + '00' * 64   # Out path
-            + '00' * 32   # Name
-            + '01020304'  # last_advert (little-endian uint32)
-            + '00' * 8    # Location
-            + '05060708'  # lastmod
+            "meshcore://1100"
+            + "00" * 32  # Public key
+            + "01"  # Type
+            + "00"  # Flags
+            + "FF"  # path_len
+            + "00" * 64  # Out path
+            + "00" * 32  # Name
+            + "01020304"  # last_advert (little-endian uint32)
+            + "00" * 8  # Location
+            + "05060708"  # lastmod
         )
 
         parsed = AdvertParser.parse(with_timestamps)
@@ -288,5 +288,5 @@ class TestRealWorldExamples:
 
         assert parsed1.public_key == parsed2.public_key
         assert parsed1.name == parsed2.name
-        assert parsed1.type == parsed2.type
+        assert parsed1.adv_type == parsed2.adv_type
         assert parsed1.flags == parsed2.flags

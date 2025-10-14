@@ -38,10 +38,10 @@ ADV_TYPE_SENSOR = 4
 
 # Flag masks (for broadcast format)
 ADV_LATLON_MASK = 0x10  # Bit 4: Location present
-ADV_FEAT1_MASK = 0x20   # Bit 5: Feature 1 present
-ADV_FEAT2_MASK = 0x40   # Bit 6: Feature 2 present
-ADV_NAME_MASK = 0x80    # Bit 7: Name present
-ADV_TYPE_MASK = 0x0F    # Bits 0-3: Type
+ADV_FEAT1_MASK = 0x20  # Bit 5: Feature 1 present
+ADV_FEAT2_MASK = 0x40  # Bit 6: Feature 2 present
+ADV_NAME_MASK = 0x80  # Bit 7: Name present
+ADV_TYPE_MASK = 0x0F  # Bits 0-3: Type
 
 
 @dataclass
@@ -50,26 +50,26 @@ class ParsedAdvert:
 
     # Raw data
     advert_string: str  # Full meshcore:// URL
-    raw_hex: str        # Hex data after meshcore://
-    raw_bytes: bytes    # Raw byte data
+    raw_hex: str  # Hex data after meshcore://
+    raw_bytes: bytes  # Raw byte data
 
     # Format information
-    format_type: str    # "contact_export" or "broadcast"
+    format_type: str  # "contact_export" or "broadcast"
 
     # Core fields
     public_key: Optional[str] = None  # Only in contact export format
-    type: Optional[int] = None        # Advertisement type (0-15)
-    type_name: Optional[str] = None   # Human-readable type name
-    flags: Optional[int] = None       # Flags from contact export
-    name: Optional[str] = None        # Device/contact name
+    adv_type: Optional[int] = None  # Advertisement type (0-15)
+    type_name: Optional[str] = None  # Human-readable type name
+    flags: Optional[int] = None  # Flags from contact export
+    name: Optional[str] = None  # Device/contact name
 
     # Location (contact export format)
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
     # Timestamps (contact export format)
-    last_advert: Optional[int] = None   # Unix timestamp
-    last_modified: Optional[int] = None # Unix timestamp
+    last_advert: Optional[int] = None  # Unix timestamp
+    last_modified: Optional[int] = None  # Unix timestamp
 
     # Path information (contact export format)
     out_path: Optional[str] = None
@@ -110,13 +110,13 @@ class AdvertParser:
             raise ValueError(f"URL must start with {cls.PROTOCOL}")
 
         # Extract hex data
-        hex_data = meshcore_url[len(cls.PROTOCOL):]
+        hex_data = meshcore_url[len(cls.PROTOCOL) :]
 
         if not hex_data:
             raise ValueError("URL contains no data after protocol")
 
         # Validate hex format
-        if not all(c in '0123456789abcdefABCDEF' for c in hex_data):
+        if not all(c in "0123456789abcdefABCDEF" for c in hex_data):
             raise ValueError("URL contains invalid hex characters")
 
         # Convert to bytes
@@ -172,8 +172,8 @@ class AdvertParser:
             raise ValueError(f"Contact export data too short: {len(data)} bytes (expected >= 111)")
 
         # Parse 2-byte header
-        version_byte = data[0]
-        reserved = data[1]
+        version_byte = data[0]  # noqa: F841
+        reserved = data[1]  # noqa: F841
 
         # CONTACT packet data starts at byte 2
         # meshcore_py format (with code byte stripped):
@@ -190,33 +190,33 @@ class AdvertParser:
         offset = 2  # Start of CONTACT packet data (after 2-byte header)
 
         # Parse public key (32 bytes from offset to offset+32)
-        public_key = data[offset:offset+32].hex()
+        public_key = data[offset : offset + 32].hex()
 
         # Parse type (at offset+32)
-        adv_type = data[offset+32] if len(data) > offset+32 else 0
+        adv_type = data[offset + 32] if len(data) > offset + 32 else 0
         type_name = cls.TYPE_NAMES.get(adv_type, f"Unknown({adv_type})")
 
         # Parse flags (at offset+33)
-        flags = data[offset+33] if len(data) > offset+33 else 0
+        flags = data[offset + 33] if len(data) > offset + 33 else 0
 
         # Parse out_path_len (at offset+34, signed)
-        out_path_len = struct.unpack('b', bytes([data[offset+34]]))[0] if len(data) > offset+34 else -1
+        out_path_len = struct.unpack("b", bytes([data[offset + 34]]))[0] if len(data) > offset + 34 else -1
         if out_path_len == -1:
             out_path_len = 0
 
         # Parse out_path (starts at offset+35, up to out_path_len bytes)
         out_path = None
-        if len(data) > offset+35 and out_path_len > 0:
-            out_path = data[offset+35:offset+35+out_path_len].hex()
+        if len(data) > offset + 35 and out_path_len > 0:
+            out_path = data[offset + 35 : offset + 35 + out_path_len].hex()
 
         # Parse name (32 bytes at offset+99 to offset+131, null-terminated/null-padded)
         # meshcore_py offset 100-131 maps to our offset+99 to offset+131
         # Note: name may be null-padded at the beginning or end
         name = None
-        if len(data) > offset+99:
-            name_bytes = data[offset+99:min(offset+131, len(data))]
+        if len(data) > offset + 99:
+            name_bytes = data[offset + 99 : min(offset + 131, len(data))]
             # Decode the full field and strip all null bytes and whitespace
-            name = name_bytes.decode('utf-8', errors='ignore').replace('\x00', '').strip()
+            name = name_bytes.decode("utf-8", errors="ignore").replace("\x00", "").strip()
             if not name:  # If empty after cleaning, set to None
                 name = None
 
@@ -227,17 +227,17 @@ class AdvertParser:
         latitude = None
         longitude = None
 
-        if len(data) >= offset+135:
-            last_advert = struct.unpack('<I', data[offset+131:offset+135])[0]
+        if len(data) >= offset + 135:
+            last_advert = struct.unpack("<I", data[offset + 131 : offset + 135])[0]
 
-        if len(data) >= offset+143:
-            lat_raw = struct.unpack('<i', data[offset+135:offset+139])[0]
-            lon_raw = struct.unpack('<i', data[offset+139:offset+143])[0]
+        if len(data) >= offset + 143:
+            lat_raw = struct.unpack("<i", data[offset + 135 : offset + 139])[0]
+            lon_raw = struct.unpack("<i", data[offset + 139 : offset + 143])[0]
             latitude = lat_raw / 1e6
             longitude = lon_raw / 1e6
 
-        if len(data) >= offset+147:
-            last_modified = struct.unpack('<I', data[offset+143:offset+147])[0]
+        if len(data) >= offset + 147:
+            last_modified = struct.unpack("<I", data[offset + 143 : offset + 147])[0]
 
         return ParsedAdvert(
             advert_string=advert_string,
@@ -245,7 +245,7 @@ class AdvertParser:
             raw_bytes=data,
             format_type="contact_export",
             public_key=public_key,
-            type=adv_type,
+            adv_type=adv_type,
             type_name=type_name,
             flags=flags,
             name=name,
@@ -293,12 +293,12 @@ class AdvertParser:
             if offset + 8 > len(data):
                 raise ValueError("Not enough data for location field")
 
-            lat_bytes = data[offset:offset + 4]
-            lon_bytes = data[offset + 4:offset + 8]
+            lat_bytes = data[offset : offset + 4]
+            lon_bytes = data[offset + 4 : offset + 8]
 
             # Convert bytes to signed int32 (little-endian) and scale
-            latitude = struct.unpack('<i', lat_bytes)[0] / 1e6
-            longitude = struct.unpack('<i', lon_bytes)[0] / 1e6
+            latitude = struct.unpack("<i", lat_bytes)[0] / 1e6
+            longitude = struct.unpack("<i", lon_bytes)[0] / 1e6
 
             offset += 8
 
@@ -323,18 +323,18 @@ class AdvertParser:
             name_bytes = data[offset:]
 
             # Find null terminator
-            null_pos = name_bytes.find(b'\x00')
+            null_pos = name_bytes.find(b"\x00")
             if null_pos != -1:
                 name_bytes = name_bytes[:null_pos]
 
-            name = name_bytes.decode('utf-8', errors='ignore').strip()
+            name = name_bytes.decode("utf-8", errors="ignore").strip()
 
         return ParsedAdvert(
             advert_string=advert_string,
             raw_hex=raw_hex,
             raw_bytes=data,
             format_type="broadcast",
-            type=adv_type,
+            adv_type=adv_type,
             type_name=type_name,
             flags=flags,
             name=name,

@@ -3,9 +3,7 @@
 import argparse
 import sys
 
-from coretact import __version__
-from coretact.bot import main as bot_main
-from coretact.api import run_server
+from coretact.version import __version__
 
 
 def main():
@@ -24,7 +22,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # Bot command
-    bot_parser = subparsers.add_parser("bot", help="Run the Discord bot")
+    subparsers.add_parser("bot", help="Run the Discord bot")
 
     # API server command
     api_parser = subparsers.add_parser("api", help="Run the Web API server")
@@ -49,9 +47,13 @@ def main():
         sys.exit(1)
 
     if args.command == "bot":
+        from coretact.bot import main as bot_main
+
         bot_main()
 
     elif args.command == "api":
+        from coretact.api import run_server
+
         run_server(host=args.host, port=args.port)
 
     else:

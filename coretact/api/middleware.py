@@ -1,6 +1,5 @@
 """Middleware for the Coretact Web API."""
 
-import json
 from typing import Callable
 
 from aiohttp import web

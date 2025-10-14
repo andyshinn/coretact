@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-coretact = "coretact:main"
+coretact = "coretact.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -41,3 +41,13 @@ markers = [
 [build-system]
 requires = ["setuptools>=80", "setuptools-scm[simple]>=8"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["coretact"]
+
+[tool.setuptools_scm]
+version_file = "coretact/version.py"
+
+[tool.ruff]
+line-length = 120
+exclude = ["coretact/version.py"]

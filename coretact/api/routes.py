@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from aiohttp import web
 
-from coretact import __version__
+from coretact.version import __version__
 from coretact.log import logger
 from coretact.storage import AdvertStorage, ContactConverter, ContactFilter
 
@@ -295,11 +295,11 @@ async def get_mesh_stats(request: web.Request) -> web.Response:
             last_updated = max(last_updated, advert.updated_at)
 
             # Count by type
-            if advert.type == 1:
+            if advert.radio_type == 1:
                 by_type["companion"] += 1
-            elif advert.type == 2:
+            elif advert.radio_type == 2:
                 by_type["repeater"] += 1
-            elif advert.type == 3:
+            elif advert.radio_type == 3:
                 by_type["room"] += 1
 
         stats = {

@@ -6,7 +6,7 @@ import tempfile
 import pytest
 
 from coretact.models import Advert
-from coretact.storage import AdvertStorage, ContactConverter, ContactFilter
+from coretact.storage import AdvertStorage, ContactConverter, ContactFilter, MeshStorage
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def test_create_advert_from_url(temp_storage_dir, sample_meshcore_url):
     assert advert.discord_server_id == "123456789"
     assert advert.discord_user_id == "987654321"
     assert advert.advert_string == sample_meshcore_url
-    assert advert.type == 80  # Raw type byte from Contact Export format
+    assert advert.radio_type == 80  # Raw type byte from Contact Export format
     assert advert.name == "egrme.sh Core"
     assert advert.flags == 69  # Raw flags byte
     assert isinstance(advert.created_at, float)
@@ -63,17 +63,17 @@ def test_save_and_get_advert(temp_storage_dir, sample_meshcore_url):
     )
     advert.datafile.save()
 
-    # Retrieve the advert
+    # Retrieve the advert (no longer need discord_user_id)
     retrieved = AdvertStorage.get_advert(
         public_key=advert.public_key,
         discord_server_id="123456789",
-        discord_user_id="987654321",
     )
 
     assert retrieved is not None
     assert retrieved.public_key == advert.public_key
+    assert retrieved.discord_user_id == "987654321"  # Should be loaded from file
     assert retrieved.name == advert.name
-    assert retrieved.type == advert.type
+    assert retrieved.radio_type == advert.radio_type
 
 
 def test_delete_advert(temp_storage_dir, sample_meshcore_url):
@@ -86,11 +86,10 @@ def test_delete_advert(temp_storage_dir, sample_meshcore_url):
     )
     advert.datafile.save()
 
-    # Delete the advert
+    # Delete the advert (no longer need discord_user_id)
     success = AdvertStorage.delete_advert(
         public_key=advert.public_key,
         discord_server_id="123456789",
-        discord_user_id="987654321",
     )
 
     assert success is True
@@ -99,7 +98,6 @@ def test_delete_advert(temp_storage_dir, sample_meshcore_url):
     retrieved = AdvertStorage.get_advert(
         public_key=advert.public_key,
         discord_server_id="123456789",
-        discord_user_id="987654321",
     )
     assert retrieved is None
 
@@ -140,7 +138,7 @@ def test_contact_converter(temp_storage_dir, sample_meshcore_url):
 
     assert contact.public_key == advert.public_key
     assert contact.name == advert.name
-    assert contact.type == advert.type
+    assert contact.type == advert.radio_type
     assert contact.flags == advert.flags
     assert contact.latitude == str(advert.latitude)
     assert contact.longitude == str(advert.longitude)
@@ -155,7 +153,7 @@ def test_contact_filter_by_type(temp_storage_dir, sample_meshcore_url):
         discord_server_id="123456789",
         discord_user_id="987654321",
         advert_string="meshcore://test1",
-        type=1,  # Companion
+        radio_type=1,  # Companion
         name="Test 1",
         flags=0,
     )
@@ -165,7 +163,7 @@ def test_contact_filter_by_type(temp_storage_dir, sample_meshcore_url):
         discord_server_id="123456789",
         discord_user_id="987654321",
         advert_string="meshcore://test2",
-        type=2,  # Repeater
+        radio_type=2,  # Repeater
         name="Test 2",
         flags=0,
     )
@@ -175,7 +173,7 @@ def test_contact_filter_by_type(temp_storage_dir, sample_meshcore_url):
     # Filter by type
     filtered = ContactFilter.filter_adverts(adverts, type=1)
     assert len(filtered) == 1
-    assert filtered[0].type == 1
+    assert filtered[0].radio_type == 1
 
 
 def test_contact_filter_by_key_prefix(temp_storage_dir, sample_meshcore_url):
@@ -215,3 +213,102 @@ def test_contact_filter_by_name(temp_storage_dir, sample_meshcore_url):
 
     filtered = ContactFilter.filter_adverts(adverts, name="notfound")
     assert len(filtered) == 0
+
+
+def test_create_mesh(temp_storage_dir):
+    """Test creating a mesh metadata object."""
+    mesh = MeshStorage.create_mesh(
+        discord_server_id="123456789",
+        name="Test Server",
+        description="A test Discord server",
+        icon_url="https://example.com/icon.png",
+    )
+
+    assert mesh.discord_server_id == "123456789"
+    assert mesh.name == "Test Server"
+    assert mesh.description == "A test Discord server"
+    assert mesh.icon_url == "https://example.com/icon.png"
+    assert isinstance(mesh.created_at, float)
+    assert isinstance(mesh.updated_at, float)
+    assert mesh.created_at > 0
+    assert mesh.updated_at > 0
+
+
+def test_save_and_get_mesh(temp_storage_dir):
+    """Test saving and retrieving a mesh."""
+    # Create and save a mesh
+    mesh = MeshStorage.create_mesh(
+        discord_server_id="123456789",
+        name="Test Server",
+        description="A test Discord server",
+        icon_url="https://example.com/icon.png",
+    )
+    mesh.datafile.save()
+
+    # Retrieve the mesh
+    retrieved = MeshStorage.get_mesh("123456789")
+
+    assert retrieved is not None
+    assert retrieved.discord_server_id == "123456789"
+    assert retrieved.name == "Test Server"
+    assert retrieved.description == "A test Discord server"
+    assert retrieved.icon_url == "https://example.com/icon.png"
+
+
+def test_update_mesh(temp_storage_dir):
+    """Test updating a mesh."""
+    # Create and save a mesh
+    mesh = MeshStorage.create_mesh(
+        discord_server_id="123456789",
+        name="Test Server",
+        description="Original description",
+        icon_url="https://example.com/icon.png",
+    )
+    mesh.datafile.save()
+    original_updated_at = mesh.updated_at
+
+    # Update the mesh
+    MeshStorage.update_mesh(
+        mesh,
+        name="Updated Server",
+        description="Updated description",
+    )
+    mesh.datafile.save()
+
+    # Retrieve and verify
+    retrieved = MeshStorage.get_mesh("123456789")
+    assert retrieved is not None
+    assert retrieved.name == "Updated Server"
+    assert retrieved.description == "Updated description"
+    assert retrieved.icon_url == "https://example.com/icon.png"  # Unchanged
+    assert retrieved.updated_at > original_updated_at
+
+
+def test_delete_mesh(temp_storage_dir):
+    """Test deleting a mesh."""
+    # Create and save a mesh
+    mesh = MeshStorage.create_mesh(
+        discord_server_id="123456789",
+        name="Test Server",
+    )
+    mesh.datafile.save()
+
+    # Delete the mesh
+    success = MeshStorage.delete_mesh("123456789")
+    assert success is True
+
+    # Verify it's gone
+    retrieved = MeshStorage.get_mesh("123456789")
+    assert retrieved is None
+
+
+def test_get_nonexistent_mesh(temp_storage_dir):
+    """Test getting a mesh that doesn't exist."""
+    mesh = MeshStorage.get_mesh("999999999")
+    assert mesh is None
+
+
+def test_delete_nonexistent_mesh(temp_storage_dir):
+    """Test deleting a mesh that doesn't exist."""
+    success = MeshStorage.delete_mesh("999999999")
+    assert success is False

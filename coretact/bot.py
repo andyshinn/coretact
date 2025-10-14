@@ -7,6 +7,7 @@ from discord import Intents
 from discord.ext import commands
 
 from coretact.log import logger
+from coretact.models import Mesh
 
 # Load environment variables
 try:
@@ -57,6 +58,9 @@ class CoretactBot(commands.Bot):
             logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
         logger.info(f"Connected to {len(self.guilds)} guilds")
 
+        for guild in self.guilds:
+            await self._create_or_update_mesh(guild)
+
         # Auto-sync commands on startup if enabled
         if AUTO_SYNC_COMMANDS:
             try:
@@ -69,9 +73,48 @@ class CoretactBot(commands.Bot):
 
         logger.info("Bot is ready!")
 
+    async def on_guild_join(self, guild):
+        """Called when the bot joins a new guild.
 
-# Set up intents - minimal intents for slash commands only
+        Args:
+            guild: The guild that was joined
+        """
+        logger.info(f"Bot joined guild: {guild.name} (ID: {guild.id})")
+        await self._create_or_update_mesh(guild)
+
+    async def _create_or_update_mesh(self, guild):
+        """Create or update mesh metadata for a guild.
+
+        Args:
+            guild: Discord guild object
+        """
+
+        try:
+            # Get icon URL if available
+            icon_url = ""
+            if guild.icon:
+                icon_url = str(guild.icon.url)
+
+            mesh = Mesh.objects.get_or_create( # type: ignore
+                discord_server_id=str(guild.id),
+                name=guild.name,
+                description=guild.description or "",
+                icon_url=icon_url,
+            )
+
+            if mesh.datafile.modified:  # type: ignore[attr-defined]
+                mesh.updated_at = float(guild.created_at.timestamp())
+                mesh.datafile.save()  # type: ignore[attr-defined]
+                logger.info(f"Updated mesh metadata for guild {guild.id}: {guild.name}")
+            else:
+                logger.info(f"Created new mesh for guild {guild.id}: {guild.name}")
+        except Exception as e:
+            logger.error(f"Failed to create/update mesh for guild {guild.id}: {e}")
+
+
+# Set up intents - minimal intents for slash commands and guild events
 intents = Intents.none()
+intents.guilds = True  # Required for on_guild_join event
 
 # Create bot instance
 bot = CoretactBot(

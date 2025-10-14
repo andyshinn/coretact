@@ -4,7 +4,7 @@ from time import time
 from typing import Optional
 
 from coretact.meshcore.parser import AdvertParser
-from coretact.models import Advert, Contact, ContactsList
+from coretact.models import Advert, Contact, ContactsList, Mesh
 
 
 class AdvertStorage:
@@ -36,7 +36,7 @@ class AdvertStorage:
             discord_user_id=discord_user_id,
             public_key=parsed.public_key,
             advert_string=meshcore_url,
-            type=parsed.type,
+            radio_type=parsed.adv_type or 0,
             name=parsed.name,
             flags=parsed.flags,
             latitude=parsed.latitude,
@@ -67,7 +67,7 @@ class AdvertStorage:
 
         # Update fields from parsed data
         advert.advert_string = meshcore_url
-        advert.type = parsed.type
+        advert.radio_type = parsed.adv_type or 0
         advert.name = parsed.name
         advert.flags = parsed.flags
         advert.latitude = parsed.latitude
@@ -81,57 +81,41 @@ class AdvertStorage:
     def get_advert(
         public_key: str,
         discord_server_id: str,
-        discord_user_id: str,
     ) -> Optional[Advert]:
-        """Get an advert by public key, server, and user.
+        """Get an advert by public key and server.
 
         Args:
             public_key: 64-char hex public key
             discord_server_id: Discord guild ID
-            discord_user_id: Discord user ID
 
         Returns:
             Advert object if found, None otherwise
         """
-        try:
-            advert = Advert(
-                discord_server_id=discord_server_id,
-                discord_user_id=discord_user_id,
-                public_key=public_key,
-                advert_string="",
-                type=0,
-                name="",
-                flags=0,
-            )
-            # Check if file exists before trying to load
-            if not advert.datafile.path.exists():
-                return None
-            # Try to load from disk
-            advert.datafile.load()
-            return advert
-        except (FileNotFoundError, ValueError):
-            return None
+        # Use datafiles get_or_none() which will return None if file doesn't exist
+        # The discord_user_id will be loaded from the JSON file
+        return Advert.objects.get_or_none(  # type: ignore[return-value]
+            discord_server_id=discord_server_id,
+            public_key=public_key,
+        )
 
     @staticmethod
     def delete_advert(
         public_key: str,
         discord_server_id: str,
-        discord_user_id: str,
     ) -> bool:
-        """Delete an advert.
+        """Delete an advert by public key and server.
 
         Args:
             public_key: 64-char hex public key
             discord_server_id: Discord guild ID
-            discord_user_id: Discord user ID
 
         Returns:
             True if deleted, False if not found
         """
-        advert = AdvertStorage.get_advert(public_key, discord_server_id, discord_user_id)
-        if advert and advert.datafile.exists:
+        advert = AdvertStorage.get_advert(public_key, discord_server_id)
+        if advert and advert.datafile.exists: # type: ignore[attr-defined]
             # Delete the file using pathlib
-            advert.datafile.path.unlink()
+            advert.datafile.path.unlink() # type: ignore[attr-defined]
             return True
         return False
 
@@ -149,10 +133,10 @@ class AdvertStorage:
         Returns:
             List of Advert objects
         """
-        # Query using datafiles Manager API
-        # This will find all adverts matching the server and user
-        all_adverts = Advert.objects.filter(discord_server_id=discord_server_id, discord_user_id=discord_user_id)
-        return list(all_adverts)
+        # Get all adverts for the server, then filter by user
+        all_server_adverts = AdvertStorage.list_server_adverts(discord_server_id)
+        user_adverts = [advert for advert in all_server_adverts if advert.discord_user_id == discord_user_id]
+        return user_adverts
 
     @staticmethod
     def list_server_adverts(discord_server_id: str) -> list[Advert]:
@@ -164,9 +148,27 @@ class AdvertStorage:
         Returns:
             List of Advert objects
         """
-        all_adverts = Advert.objects.all()
-        server_adverts = [advert for advert in all_adverts if advert.discord_server_id == discord_server_id]
-        return server_adverts
+        from pathlib import Path
+        from coretact.models import STORAGE_BASE_PATH
+
+        # Path to server's adverts directory
+        server_adverts_path = Path(STORAGE_BASE_PATH) / discord_server_id / "adverts"
+
+        if not server_adverts_path.exists():
+            return []
+
+        adverts = []
+        # Iterate through all .json files in the adverts directory
+        for advert_file in server_adverts_path.glob("*.json"):
+            # Extract public key from filename (without .json extension)
+            public_key = advert_file.stem
+
+            # Load the advert
+            advert = AdvertStorage.get_advert(public_key, discord_server_id)
+            if advert:
+                adverts.append(advert)
+
+        return adverts
 
     @staticmethod
     def find_advert_by_public_key(public_key: str) -> Optional[Advert]:
@@ -178,11 +180,31 @@ class AdvertStorage:
         Returns:
             Advert object if found, None otherwise
         """
+        from pathlib import Path
+        from coretact.models import STORAGE_BASE_PATH
+
         public_key = public_key.lower()
-        all_adverts = Advert.objects.all()
-        for advert in all_adverts:
-            if advert.public_key == public_key:
-                return advert
+        storage_path = Path(STORAGE_BASE_PATH)
+
+        # Search through all server directories
+        for server_dir in storage_path.iterdir():
+            if not server_dir.is_dir():
+                continue
+
+            # Look for adverts subdirectory
+            adverts_dir = server_dir / "adverts"
+            if not adverts_dir.exists():
+                continue
+
+            # Check if this public key exists in this server
+            advert_file = adverts_dir / f"{public_key}.json"
+            if advert_file.exists():
+                # Load and return the advert
+                server_id = server_dir.name
+                advert = AdvertStorage.get_advert(public_key, server_id)
+                if advert:
+                    return advert
+
         return None
 
 
@@ -200,7 +222,7 @@ class ContactConverter:
             Contact object for API response
         """
         return Contact(
-            type=advert.type,
+            type=advert.radio_type,
             name=advert.name,
             custom_name=None,  # Not implemented yet
             public_key=advert.public_key,
@@ -252,7 +274,7 @@ class ContactFilter:
         filtered = adverts
 
         if type is not None:
-            filtered = [advert for advert in filtered if advert.type == type]
+            filtered = [advert for advert in filtered if advert.radio_type == type]
 
         if key_prefix is not None:
             filtered = [advert for advert in filtered if advert.public_key.startswith(key_prefix.lower())]
@@ -265,3 +287,97 @@ class ContactFilter:
             filtered = [advert for advert in filtered if advert.discord_user_id == user_id]
 
         return filtered
+
+
+class MeshStorage:
+    """Storage operations for mesh/server metadata."""
+
+    @staticmethod
+    def create_mesh(
+        discord_server_id: str,
+        name: str,
+        description: str = "",
+        icon_url: str = "",
+    ) -> Mesh:
+        """Create a new Mesh metadata object.
+
+        Args:
+            discord_server_id: Discord guild ID
+            name: Discord server name
+            description: Discord server description
+            icon_url: Discord server icon URL
+
+        Returns:
+            Mesh object ready to be saved
+        """
+
+        return Mesh(
+            discord_server_id=discord_server_id,
+            name=name,
+            description=description,
+            icon_url=icon_url,
+            created_at=time(),
+            updated_at=time(),
+        )
+
+    @staticmethod
+    def get_mesh(discord_server_id: str) -> Optional["Mesh"]:
+        """Get mesh metadata for a server.
+
+        Args:
+            discord_server_id: Discord guild ID
+
+        Returns:
+            Mesh object if found, None otherwise
+        """
+        return Mesh.objects.get_or_none(discord_server_id=discord_server_id)  # type: ignore[attr-defined]
+
+    @staticmethod
+    def update_mesh(mesh: "Mesh", **kwargs) -> "Mesh":
+        """Update an existing mesh with new data.
+
+        Args:
+            mesh: Existing Mesh object
+            **kwargs: Fields to update (name, description, icon_url)
+
+        Returns:
+            Updated Mesh object
+        """
+        if "name" in kwargs:
+            mesh.name = kwargs["name"]
+        if "description" in kwargs:
+            mesh.description = kwargs["description"]
+        if "icon_url" in kwargs:
+            mesh.icon_url = kwargs["icon_url"]
+
+        mesh.updated_at = time()
+        return mesh
+
+    @staticmethod
+    def delete_mesh(discord_server_id: str) -> bool:
+        """Delete mesh metadata.
+
+        Args:
+            discord_server_id: Discord guild ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        mesh = MeshStorage.get_mesh(discord_server_id)
+        if mesh and hasattr(mesh, "datafile") and mesh.datafile.exists:  # type: ignore
+            # Delete the file using pathlib
+            mesh.datafile.path.unlink()  # type: ignore
+            return True
+        return False
+
+    @staticmethod
+    def list_all_meshes() -> list["Mesh"]:
+        """List all mesh metadata entries.
+
+        Returns:
+            List of Mesh objects
+        """
+        from coretact.models import Mesh
+
+        all_meshes = Mesh.objects.all()
+        return list(all_meshes)
