@@ -289,7 +289,6 @@ class CoretactCog(commands.GroupCog, name="coretact"):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         logger.info(f"Listed {len(adverts)} adverts for user {target_user_id} in guild {interaction.guild_id}")
 
-
     @app_commands.check(is_coretact_admin_or_owner)
     @app_commands.command(name="remove", description="Remove a meshcore contact advertisement")
     @app_commands.describe(public_key="The full public key of the advertisement to remove (64 characters)")
@@ -645,7 +644,7 @@ class CoretactCog(commands.GroupCog, name="coretact"):
         for guild in bot.guilds:
             try:
                 # Call the bot's _create_or_update_mesh method
-                if hasattr(bot, '_create_or_update_mesh'):
+                if hasattr(bot, "_create_or_update_mesh"):
                     await bot._create_or_update_mesh(guild)
                     updated_count += 1
                     logger.info(f"Refreshed mesh for guild {guild.id}: {guild.name}")

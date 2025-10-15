@@ -36,7 +36,7 @@ def create_app() -> web.Application:
     return app
 
 
-def run_server(host: str|None = None, port: int|None = None) -> None:
+def run_server(host: str | None = None, port: int | None = None) -> None:
     """Run the web server.
 
     Args:

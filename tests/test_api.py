@@ -5,7 +5,7 @@ from time import time
 from aiohttp.test_utils import AioHTTPTestCase
 
 from coretact.api.server import create_app
-from coretact.models import Advert
+from coretact.models import Advert, Mesh
 
 
 class TestWebAPI(AioHTTPTestCase):
@@ -325,6 +325,180 @@ class TestWebAPI(AioHTTPTestCase):
 
         finally:
             # Clean up
+            advert1.datafile.path.unlink(missing_ok=True)
+            advert2.datafile.path.unlink(missing_ok=True)
+
+    async def test_list_all_meshes(self):
+        """Test listing all meshes endpoint."""
+        # Create multiple meshes with contacts
+        mesh1 = Mesh(
+            discord_server_id="test_server_1",
+            name="Test Server 1",
+            description="First test server",
+            icon_url="https://example.com/icon1.png",
+            created_at=time(),
+            updated_at=time(),
+        )
+        mesh1.datafile.save()
+
+        mesh2 = Mesh(
+            discord_server_id="test_server_2",
+            name="Test Server 2",
+            description="Second test server",
+            icon_url="https://example.com/icon2.png",
+            created_at=time(),
+            updated_at=time(),
+        )
+        mesh2.datafile.save()
+
+        # Add contacts to mesh1
+        advert1 = Advert(
+            discord_server_id="test_server_1",
+            discord_user_id="user1",
+            public_key="m" * 64,
+            advert_string="meshcore://test12",
+            radio_type=1,
+            name="Test Device 12",
+            flags=0,
+            latitude=0.0,
+            longitude=0.0,
+            out_path="",
+            created_at=time(),
+            updated_at=time(),
+        )
+        advert1.datafile.save()
+
+        advert2 = Advert(
+            discord_server_id="test_server_1",
+            discord_user_id="user2",
+            public_key="n" * 64,
+            advert_string="meshcore://test13",
+            radio_type=2,
+            name="Test Device 13",
+            flags=0,
+            latitude=0.0,
+            longitude=0.0,
+            out_path="",
+            created_at=time(),
+            updated_at=time(),
+        )
+        advert2.datafile.save()
+
+        # Add contact to mesh2
+        advert3 = Advert(
+            discord_server_id="test_server_2",
+            discord_user_id="user3",
+            public_key="o" * 64,
+            advert_string="meshcore://test14",
+            radio_type=3,
+            name="Test Device 14",
+            flags=0,
+            latitude=0.0,
+            longitude=0.0,
+            out_path="",
+            created_at=time(),
+            updated_at=time(),
+        )
+        advert3.datafile.save()
+
+        try:
+            # List all meshes
+            resp = await self.client.get("/api/v1/mesh")
+            assert resp.status == 200
+
+            data = await resp.json()
+            assert "meshes" in data
+            assert len(data["meshes"]) == 2
+
+            # Find mesh1 and mesh2 in response
+            mesh1_data = next((m for m in data["meshes"] if m["server_id"] == "test_server_1"), None)
+            mesh2_data = next((m for m in data["meshes"] if m["server_id"] == "test_server_2"), None)
+
+            assert mesh1_data is not None
+            assert mesh1_data["name"] == "Test Server 1"
+            assert mesh1_data["description"] == "First test server"
+            assert mesh1_data["contact_count"] == 2
+
+            assert mesh2_data is not None
+            assert mesh2_data["name"] == "Test Server 2"
+            assert mesh2_data["description"] == "Second test server"
+            assert mesh2_data["contact_count"] == 1
+
+        finally:
+            # Clean up
+            mesh1.datafile.path.unlink(missing_ok=True)
+            mesh2.datafile.path.unlink(missing_ok=True)
+            advert1.datafile.path.unlink(missing_ok=True)
+            advert2.datafile.path.unlink(missing_ok=True)
+            advert3.datafile.path.unlink(missing_ok=True)
+
+    async def test_mesh_info(self):
+        """Test mesh info endpoint."""
+        # Create mesh metadata
+        mesh = Mesh(
+            discord_server_id="test_server_info",
+            name="Test Server",
+            description="A test server",
+            icon_url="https://example.com/icon.png",
+            created_at=time(),
+            updated_at=time(),
+        )
+        mesh.datafile.save()
+
+        # Create test adverts for this mesh
+        advert1 = Advert(
+            discord_server_id="test_server_info",
+            discord_user_id="user1",
+            public_key="k" * 64,
+            advert_string="meshcore://test10",
+            radio_type=1,
+            name="Test Device 10",
+            flags=0,
+            latitude=0.0,
+            longitude=0.0,
+            out_path="",
+            created_at=time(),
+            updated_at=time(),
+        )
+        advert1.datafile.save()
+
+        advert2 = Advert(
+            discord_server_id="test_server_info",
+            discord_user_id="user2",
+            public_key="l" * 64,
+            advert_string="meshcore://test11",
+            radio_type=2,
+            name="Test Device 11",
+            flags=0,
+            latitude=0.0,
+            longitude=0.0,
+            out_path="",
+            created_at=time(),
+            updated_at=time(),
+        )
+        advert2.datafile.save()
+
+        try:
+            # Get mesh info
+            resp = await self.client.get("/api/v1/mesh/test_server_info")
+            assert resp.status == 200
+
+            data = await resp.json()
+            assert data["server_id"] == "test_server_info"
+            assert data["name"] == "Test Server"
+            assert data["description"] == "A test server"
+            assert data["icon_url"] == "https://example.com/icon.png"
+            assert data["contact_count"] == 2
+            assert "created_at" in data
+            assert "updated_at" in data
+
+            # Test non-existent mesh
+            resp = await self.client.get("/api/v1/mesh/nonexistent_server")
+            assert resp.status == 404
+
+        finally:
+            # Clean up
+            mesh.datafile.path.unlink(missing_ok=True)
             advert1.datafile.path.unlink(missing_ok=True)
             advert2.datafile.path.unlink(missing_ok=True)
 

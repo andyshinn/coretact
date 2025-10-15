@@ -31,16 +31,19 @@ class AdvertStorage:
         """
         parsed = AdvertParser.parse(meshcore_url)
 
+        if not parsed.public_key:
+            raise ValueError("Advertisement must contain a public key")
+
         return Advert(
             discord_server_id=discord_server_id,
             discord_user_id=discord_user_id,
             public_key=parsed.public_key,
             advert_string=meshcore_url,
             radio_type=parsed.adv_type or 0,
-            name=parsed.name,
-            flags=parsed.flags,
-            latitude=parsed.latitude,
-            longitude=parsed.longitude,
+            name=parsed.name or "",
+            flags=parsed.flags or 0,
+            latitude=parsed.latitude or 0.0,
+            longitude=parsed.longitude or 0.0,
             out_path="",  # No longer used in modern advertisement format
             created_at=time(),
             updated_at=time(),
@@ -68,11 +71,11 @@ class AdvertStorage:
         # Update fields from parsed data
         advert.advert_string = meshcore_url
         advert.radio_type = parsed.adv_type or 0
-        advert.name = parsed.name
-        advert.flags = parsed.flags
-        advert.latitude = parsed.latitude
-        advert.longitude = parsed.longitude
-        advert.out_path = parsed.out_path
+        advert.name = parsed.name or ""
+        advert.flags = parsed.flags or 0
+        advert.latitude = parsed.latitude or 0.0
+        advert.longitude = parsed.longitude or 0.0
+        advert.out_path = ""  # No longer used in modern advertisement format
         advert.updated_at = time()
 
         return advert
@@ -113,9 +116,9 @@ class AdvertStorage:
             True if deleted, False if not found
         """
         advert = AdvertStorage.get_advert(public_key, discord_server_id)
-        if advert and advert.datafile.exists: # type: ignore[attr-defined]
+        if advert and advert.datafile.exists:  # type: ignore[attr-defined]
             # Delete the file using pathlib
-            advert.datafile.path.unlink() # type: ignore[attr-defined]
+            advert.datafile.path.unlink()  # type: ignore[attr-defined]
             return True
         return False
 
@@ -139,36 +142,21 @@ class AdvertStorage:
         return user_adverts
 
     @staticmethod
-    def list_server_adverts(discord_server_id: str) -> list[Advert]:
+    def list_server_adverts(discord_server_id: str):
         """List all adverts for a server.
 
         Args:
             discord_server_id: Discord guild ID
 
         Returns:
-            List of Advert objects
+            Generator of Advert objects
+
+        Note:
+            Returns a generator from datafiles that yields Advert objects.
+            Callers should convert to list if needed: list(storage.list_server_adverts(...))
         """
-        from pathlib import Path
-        from coretact.models import STORAGE_BASE_PATH
+        return Advert.objects.filter(discord_server_id=discord_server_id)  # type: ignore[attr-defined]
 
-        # Path to server's adverts directory
-        server_adverts_path = Path(STORAGE_BASE_PATH) / discord_server_id / "adverts"
-
-        if not server_adverts_path.exists():
-            return []
-
-        adverts = []
-        # Iterate through all .json files in the adverts directory
-        for advert_file in server_adverts_path.glob("*.json"):
-            # Extract public key from filename (without .json extension)
-            public_key = advert_file.stem
-
-            # Load the advert
-            advert = AdvertStorage.get_advert(public_key, discord_server_id)
-            if advert:
-                adverts.append(advert)
-
-        return adverts
 
     @staticmethod
     def find_advert_by_public_key(public_key: str) -> Optional[Advert]:

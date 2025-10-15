@@ -95,7 +95,7 @@ class CoretactBot(commands.Bot):
             if guild.icon:
                 icon_url = str(guild.icon.url)
 
-            mesh = Mesh.objects.get_or_create( # type: ignore
+            mesh = Mesh.objects.get_or_create(  # type: ignore
                 discord_server_id=str(guild.id),
                 name=guild.name,
                 description=guild.description or "",

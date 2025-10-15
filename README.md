@@ -222,6 +222,71 @@ curl "http://localhost:8080/api/v1/mesh/123456789/user/987654321/contacts"
 
 **Response:** Same format as "Get Mesh Contacts" endpoint.
 
+#### List All Meshes
+
+```http
+GET /api/v1/mesh
+```
+
+List all meshes (Discord servers) with their basic information and contact counts.
+
+**Example Request:**
+```bash
+curl "http://localhost:8080/api/v1/mesh"
+```
+
+**Response:**
+```json
+{
+  "meshes": [
+    {
+      "server_id": "123456789",
+      "name": "My Discord Server",
+      "description": "A server for meshcore enthusiasts",
+      "icon_url": "https://cdn.discordapp.com/icons/123456789/abcdef.png",
+      "contact_count": 42,
+      "created_at": 1760299414,
+      "updated_at": 1760299414
+    },
+    {
+      "server_id": "987654321",
+      "name": "Another Server",
+      "description": "",
+      "icon_url": "",
+      "contact_count": 15,
+      "created_at": 1760299500,
+      "updated_at": 1760299500
+    }
+  ]
+}
+```
+
+#### Get Mesh Info
+
+```http
+GET /api/v1/mesh/{server_id}
+```
+
+Get information about a mesh (Discord server) including name, description, icon, and contact count.
+
+**Example Request:**
+```bash
+curl "http://localhost:8080/api/v1/mesh/123456789"
+```
+
+**Response:**
+```json
+{
+  "server_id": "123456789",
+  "name": "My Discord Server",
+  "description": "A server for meshcore enthusiasts",
+  "icon_url": "https://cdn.discordapp.com/icons/123456789/abcdef.png",
+  "contact_count": 42,
+  "created_at": 1760299414,
+  "updated_at": 1760299414
+}
+```
+
 #### Get Mesh Stats
 
 ```http

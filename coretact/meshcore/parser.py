@@ -228,15 +228,11 @@ class AdvertParser:
         # Only accept Advertisement packets (payload type 4)
         if payload_type != PACKET_PAYLOAD_TYPE_ADVERTISEMENT:
             raise ValueError(
-                f"Invalid packet type: expected payload_type=4 (Advertisement), "
-                f"got payload_type={payload_type}"
+                f"Invalid packet type: expected payload_type=4 (Advertisement), got payload_type={payload_type}"
             )
 
         if len(data) < 100:
-            raise ValueError(
-                f"Advertisement packet too short: {len(data)} bytes "
-                f"(minimum 100 bytes required)"
-            )
+            raise ValueError(f"Advertisement packet too short: {len(data)} bytes (minimum 100 bytes required)")
 
         return cls._parse_advertisement_packet(advert_string, raw_hex, data)
 
@@ -263,8 +259,7 @@ class AdvertParser:
 
         if len(data) < payload_offset + 100:  # 32 + 4 + 64 = 100 minimum
             raise ValueError(
-                f"Packet too short for advertisement payload: {len(data)} bytes "
-                f"(need at least {payload_offset + 100})"
+                f"Packet too short for advertisement payload: {len(data)} bytes (need at least {payload_offset + 100})"
             )
 
         payload = data[payload_offset:]

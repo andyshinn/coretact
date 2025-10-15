@@ -6,6 +6,7 @@ from aiohttp import web
 
 from coretact.version import __version__
 from coretact.log import logger
+from coretact.models import Mesh
 from coretact.storage import AdvertStorage, ContactConverter, ContactFilter
 
 
@@ -50,7 +51,7 @@ async def get_mesh_contacts(request: web.Request) -> web.Response:
             raise web.HTTPBadRequest(reason=f"Invalid type parameter: {e}")
 
     # Get all adverts for the server
-    adverts = storage.list_server_adverts(discord_server_id=server_id)
+    adverts = list(storage.list_server_adverts(discord_server_id=server_id))
 
     # Apply filters
     filtered_adverts = ContactFilter.filter_adverts(
@@ -167,7 +168,7 @@ async def bulk_contacts(request: web.Request) -> web.Response:
     public_keys = [key.lower() for key in public_keys]
 
     # Get all adverts for the server
-    all_adverts = storage.list_server_adverts(discord_server_id=server_id)
+    all_adverts = list(storage.list_server_adverts(discord_server_id=server_id))
 
     # Filter to only requested keys
     matching_adverts = [advert for advert in all_adverts if advert.public_key in public_keys]
@@ -274,7 +275,7 @@ async def get_mesh_stats(request: web.Request) -> web.Response:
     server_id = request.match_info["server_id"]
 
     # Get all adverts for the server
-    adverts = storage.list_server_adverts(discord_server_id=server_id)
+    adverts = list(storage.list_server_adverts(discord_server_id=server_id))
 
     if not adverts:
         stats = {
@@ -314,6 +315,72 @@ async def get_mesh_stats(request: web.Request) -> web.Response:
     return web.json_response(stats)
 
 
+async def list_all_meshes(request: web.Request) -> web.Response:
+    """List all meshes with their basic information.
+
+    Returns:
+        JSON response with list of all meshes
+    """
+    storage: AdvertStorage = request.app["storage"]
+
+    # Get all meshes
+    all_meshes = Mesh.objects.all()  # type: ignore[attr-defined]
+
+    # Build response with contact counts
+    meshes_list = []
+    for mesh in all_meshes:
+        # Get contact count for this mesh
+        adverts = list(storage.list_server_adverts(discord_server_id=mesh.discord_server_id))
+
+        meshes_list.append(
+            {
+                "server_id": mesh.discord_server_id,
+                "name": mesh.name,
+                "description": mesh.description,
+                "icon_url": mesh.icon_url,
+                "contact_count": len(list(adverts)),
+                "created_at": int(mesh.created_at),
+                "updated_at": int(mesh.updated_at),
+            }
+        )
+
+    logger.info(f"Returned {len(meshes_list)} meshes")
+    return web.json_response({"meshes": meshes_list})
+
+
+async def get_mesh_info(request: web.Request) -> web.Response:
+    """Get information about a mesh (Discord server).
+
+    Returns:
+        JSON response with mesh information including name, ID, and contact count
+    """
+    storage: AdvertStorage = request.app["storage"]
+    server_id = request.match_info["server_id"]
+
+    # Get mesh metadata
+    mesh = Mesh.objects.get_or_none(discord_server_id=server_id)  # type: ignore[attr-defined]
+
+    if not mesh:
+        raise web.HTTPNotFound(reason=f"Mesh {server_id} not found")
+
+    # Get all adverts to count them
+    adverts = list(storage.list_server_adverts(discord_server_id=server_id))
+
+    # Build response
+    mesh_info = {
+        "server_id": mesh.discord_server_id,
+        "name": mesh.name,
+        "description": mesh.description,
+        "icon_url": mesh.icon_url,
+        "contact_count": len(adverts),
+        "created_at": int(mesh.created_at),
+        "updated_at": int(mesh.updated_at),
+    }
+
+    logger.info(f"Returned info for mesh {server_id}: {mesh.name} with {len(adverts)} contacts")
+    return web.json_response(mesh_info)
+
+
 def setup_routes(app: web.Application) -> None:
     """Set up API routes.
 
@@ -321,6 +388,8 @@ def setup_routes(app: web.Application) -> None:
         app: The aiohttp application
     """
     app.router.add_get("/health", health_check)
+    app.router.add_get("/api/v1/mesh", list_all_meshes)
+    app.router.add_get("/api/v1/mesh/{server_id}", get_mesh_info)
     app.router.add_get("/api/v1/mesh/{server_id}/contacts", get_mesh_contacts)
     app.router.add_get("/api/v1/contact/{public_key}", get_contact_by_key)
     app.router.add_post("/api/v1/mesh/{server_id}/contacts/bulk", bulk_contacts)

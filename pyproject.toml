@@ -21,6 +21,7 @@ dev = [
   "pytest-cov",
   "black",
   "isort",
+  "pytest-env>=1.2.0",
 ]
 
 [tool.pytest.ini_options]
@@ -38,6 +39,9 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
 ]
+
+[tool.pytest_env]
+STORAGE_PATH = "tests/storage"
 
 [build-system]
 requires = ["setuptools>=80", "setuptools-scm[simple]>=8"]

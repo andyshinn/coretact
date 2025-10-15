@@ -31,7 +31,6 @@ storage_base.mkdir(parents=True, exist_ok=True)
 STORAGE_BASE_PATH = str(storage_base)
 
 
-@dataclass
 @datafile(f"{STORAGE_BASE_PATH}/{{self.discord_server_id}}/adverts/{{self.public_key}}.json")
 class Advert:
     """Advertisement stored on disk.
@@ -43,8 +42,8 @@ class Advert:
     """
 
     discord_server_id: str  # Discord guild ID
-    discord_user_id: str  # Discord user ID (stored in file, not path)
     public_key: str  # 64-char hex string (32 bytes)
+    discord_user_id: str  # Discord user ID (stored in file, not path)
     advert_string: str  # Full meshcore:// URL
     radio_type: int  # Device type (1=companion, 2=repeater, 3=room)
     name: str  # Device name extracted from advert
@@ -63,7 +62,6 @@ class Advert:
             self.updated_at = time()
 
 
-@dataclass
 @datafile(f"{STORAGE_BASE_PATH}/{{self.discord_server_id}}/info.json")
 class Mesh:
     """Mesh configuration stored on disk.
