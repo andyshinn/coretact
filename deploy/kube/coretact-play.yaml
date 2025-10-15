@@ -1,0 +1,196 @@
+---
+# Podman Kubernetes YAML for Coretact
+#
+# This file uses environment variable substitution for the container image.
+# Use envsubst to replace ${IMAGE} before deploying.
+#
+# Setup:
+#   1. Copy configmap template: cp configmap.yaml.example configmap.yaml
+#   2. Edit configmap.yaml and set your DISCORD_BOT_TOKEN
+#   3. Deploy: export IMAGE=localhost/coretact:latest
+#              envsubst < coretact-play.yaml | podman play kube --configmap configmap.yaml -
+#   4. Remove: envsubst < coretact-play.yaml | podman play kube --down -
+#
+# Or use the deploy.sh script which handles this automatically.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: coretact
+  labels:
+    app: coretact
+  annotations:
+    # Podman-specific: Generate systemd units
+    io.podman.annotations.autoremove/bot: "false"
+    io.podman.annotations.autoremove/api: "false"
+    # Podman-specific: Publish ports on all interfaces
+    io.podman.annotations.publish-all: "false"
+spec:
+  # Restart policy at pod level
+  restartPolicy: Always
+  # Share storage volume between bot and api
+  volumes:
+    - name: coretact-storage
+      persistentVolumeClaim:
+        claimName: coretact-storage
+    - name: coretact-logs
+      persistentVolumeClaim:
+        claimName: coretact-logs
+
+  containers:
+    # Discord Bot Container
+    - name: bot
+      image: ${IMAGE}
+      command:
+        - uv
+        - run
+        - python
+        - -m
+        - coretact
+        - bot
+      envFrom:
+        # Load Discord credentials from ConfigMap (deploy with --configmap)
+        - configMapRef:
+            name: coretact-discord-secrets
+            optional: false
+      env:
+        # Bot configuration
+        - name: AUTO_SYNC_COMMANDS
+          value: "true"
+
+        # Storage configuration
+        - name: STORAGE_PATH
+          value: /var/lib/coretact/storage
+        - name: LOG_PATH
+          value: /var/lib/coretact/logs/bot.log
+
+        # Logging
+        - name: LOGURU_LEVEL
+          value: INFO
+        - name: TZ
+          value: UTC
+
+        # Sentry (optional)
+        - name: SENTRY_DSN
+          value: ""
+
+      volumeMounts:
+        - name: coretact-storage
+          mountPath: /var/lib/coretact/storage
+        - name: coretact-logs
+          mountPath: /var/lib/coretact/logs
+
+      resources:
+        limits:
+          memory: 512Mi
+          cpu: "0.5"
+        requests:
+          memory: 256Mi
+          cpu: "0.1"
+
+    # Web API Container
+    - name: api
+      image: ${IMAGE}
+      command:
+        - uv
+        - run
+        - python
+        - -m
+        - coretact
+        - api
+        - --host
+        - "0.0.0.0"
+        - --port
+        - "8080"
+      env:
+        # Web API Configuration
+        - name: WEB_API_HOST
+          value: "0.0.0.0"
+        - name: WEB_API_PORT
+          value: "8080"
+
+        # Storage Configuration (shared with bot)
+        - name: STORAGE_PATH
+          value: /var/lib/coretact/storage
+        - name: LOG_PATH
+          value: /var/lib/coretact/logs/api.log
+
+        # Logging
+        - name: LOGURU_LEVEL
+          value: INFO
+        - name: TZ
+          value: UTC
+
+        # Sentry (Optional)
+        - name: SENTRY_DSN
+          value: ""
+
+      ports:
+        - containerPort: 8080
+          hostPort: 8080
+          protocol: TCP
+
+      volumeMounts:
+        - name: coretact-storage
+          mountPath: /var/lib/coretact/storage
+        - name: coretact-logs
+          mountPath: /var/lib/coretact/logs
+
+      # Health check for the API
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 3
+
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
+
+      resources:
+        limits:
+          memory: 512Mi
+          cpu: "0.5"
+        requests:
+          memory: 256Mi
+          cpu: "0.1"
+
+---
+# Persistent Volume Claim for storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: coretact-storage
+  annotations:
+    # Podman-specific: Set SELinux context for shared volume
+    io.podman.annotations.label: "io.containers.capabilities=CHOWN,DAC_OVERRIDE,FOWNER,FSETID,KILL,NET_BIND_SERVICE,SETFCAP,SETGID,SETPCAP,SETUID,SYS_CHROOT"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# Persistent Volume Claim for logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: coretact-logs
+  annotations:
+    # Podman-specific: Set SELinux context for shared volume
+    io.podman.annotations.label: "io.containers.capabilities=CHOWN,DAC_OVERRIDE,FOWNER,FSETID,KILL,NET_BIND_SERVICE,SETFCAP,SETGID,SETPCAP,SETUID,SYS_CHROOT"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi

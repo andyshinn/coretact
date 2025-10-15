@@ -48,6 +48,10 @@ async def error_middleware(request: web.Request, handler: Callable) -> web.Respo
     try:
         return await handler(request)
     except web.HTTPException as ex:
+        # Let redirects (3xx status codes) pass through as-is
+        if 300 <= ex.status < 400:
+            raise
+
         # HTTPException already has status code and reason
         error_data = {
             "error": ex.reason,

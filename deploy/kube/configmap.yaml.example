@@ -1,0 +1,29 @@
+---
+# Coretact ConfigMap - Sensitive Discord Credentials
+#
+# Copy this file to configmap.yaml and fill in your Discord credentials:
+#   cp configmap.yaml.example configmap.yaml
+#   vi configmap.yaml  # Edit and add your tokens
+#
+# Then deploy with:
+#   podman play kube --configmap configmap.yaml coretact-play.yaml
+#
+# Security: This file contains sensitive credentials and is git-ignored
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coretact-discord-secrets
+data:
+  # =============================================================================
+  # REQUIRED: Discord Bot Token
+  # =============================================================================
+  # Get your bot token from: https://discord.com/developers/applications
+  DISCORD_BOT_TOKEN: ""  # REQUIRED: Paste your Discord bot token here
+
+  # =============================================================================
+  # Optional: Discord Bot Owner ID
+  # =============================================================================
+  # Your Discord user ID (enables owner-only commands)
+  # Right-click your username in Discord (Developer Mode) and select "Copy ID"
+  DISCORD_BOT_OWNER_ID: ""  # Optional: Your user ID (e.g., "123456789012345678")

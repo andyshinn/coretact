@@ -2,6 +2,12 @@
 logs/
 storage/
 
+# Deployment secrets (contains Discord tokens)
+deploy/kube/configmap.yaml
+
+# Generated deployment files
+deploy/kube/*.generated.yaml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -258,3 +264,7 @@ Temporary Items
 pyvenv.cfg
 .venv
 pip-selfcheck.json
+
+
+# Affinity Locks
+*~lock~

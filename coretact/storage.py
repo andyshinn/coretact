@@ -157,7 +157,6 @@ class AdvertStorage:
         """
         return Advert.objects.filter(discord_server_id=discord_server_id)  # type: ignore[attr-defined]
 
-
     @staticmethod
     def find_advert_by_public_key(public_key: str) -> Optional[Advert]:
         """Find an advert by public key across all servers.

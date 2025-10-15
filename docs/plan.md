@@ -669,10 +669,10 @@ Nothing currently in progress.
 
 ### 📋 Next Steps
 
-**Phase 6: Production Readiness** - Future
-1. Docker configuration
-2. Write deployment documentation
-3. Set up CI/CD pipeline
+**Phase 6: Production Readiness** - ✅ COMPLETE
+1. ✅ Podman/Docker configuration (Containerfile)
+2. ✅ Write deployment documentation (DEPLOYMENT.md)
+3. ✅ Set up CI/CD pipeline (GitHub Actions)
 
 **Future Enhancements:**
 - Rate limiting for API endpoints
@@ -680,6 +680,104 @@ Nothing currently in progress.
 - Web Bluetooth/Serial sync features
 - Contact QR code generation
 - Contact expiration/cleanup
+
+## Container Deployment
+
+**Files Created:**
+- `Containerfile` - Multi-purpose container supporting both bot and API modes
+- `deploy/kube/coretact-play.yaml` - Kubernetes YAML for Podman Play deployment
+- `deploy/kube/configmap.yaml.example` - ConfigMap template for Discord credentials
+- `deploy/kube/README.md` - Deployment quick reference
+- `.containerignore` - Excludes unnecessary files from builds
+- `DEPLOYMENT.md` - Comprehensive deployment guide
+
+**Container Features:**
+- Based on Python 3.12.9 (public.ecr.aws)
+- Uses `uv` for fast dependency installation
+- Supports build-time version tags via `--build-arg release=X.Y.Z`
+- Single image runs both bot and API (command override)
+- Health checks for API container
+- Persistent volumes for storage and logs
+- Resource limits (CPU/memory) configured
+- Shared storage between bot and API containers
+
+**Deployment Options:**
+1. **Podman Play Kube** (Recommended): `podman play kube podman-play.yaml`
+2. **Manual Podman Run**: Individual container commands
+3. **Systemd Integration**: Auto-start with systemd units
+
+**Image Details:**
+- Size: ~1.13 GB
+- Platform: linux/amd64 (multi-arch possible)
+- Registry: localhost/coretact:latest
+- Version tracking: Git-based with setuptools-scm
+
+**Testing:**
+```bash
+# Build
+podman build -t localhost/coretact:latest -f Containerfile . --build-arg release=0.1.0
+
+# Test
+podman run --rm localhost/coretact:latest uv run python -m coretact --help
+
+# Deploy
+cd deploy/kube
+cp configmap.yaml.example configmap.yaml
+# Edit configmap.yaml and add your Discord token
+podman play kube --configmap configmap.yaml coretact-play.yaml
+
+# Verify
+curl http://localhost:8080/health
+```
+
+## CI/CD Pipeline
+
+**GitHub Actions Workflow** (`.github/workflows/build.yml`):
+
+**Jobs:**
+1. **Test** (ubuntu-24.04)
+   - Installs `uv` and Python 3.12
+   - Runs `pytest --cov coretact`
+
+2. **Build** (self-hosted runner)
+   - Builds image with Buildah
+   - Tags: `<sha>`, `<branch>`, `latest` (main only)
+   - Pushes to GitHub Container Registry (GHCR)
+
+3. **Deploy** (self-hosted runner, releases only)
+   - Runs `deploy/deploy.sh` script
+   - Creates ConfigMap from GitHub Secrets
+   - Pulls image from GHCR
+   - Deploys with `podman play kube --configmap`
+   - Verifies API health
+
+**Deployment Script** (`deploy/deploy.sh`):
+- Bash script for automated Podman Play deployment
+- Reads credentials from environment variables
+- Updates image reference in YAML
+- Gracefully stops old pod
+- Deploys new pod with health checks
+- Shows deployment status and logs
+
+**Required GitHub Secrets:**
+- `DISCORD_BOT_TOKEN` (required)
+- `DISCORD_BOT_OWNER_ID` (optional)
+- `SENTRY_DSN` (optional)
+
+**Deployment Flow:**
+1. Create git tag: `git tag v0.1.0 && git push origin v0.1.0`
+2. Publish GitHub release
+3. CI runs tests and builds image
+4. Image pushes to GHCR
+5. Deploy script runs on self-hosted runner
+6. Pod restarts with new image
+7. Health check verifies deployment
+
+**Documentation:**
+- `.github/README.md` - Comprehensive CI/CD guide
+- Self-hosted runner setup
+- Secrets configuration
+- Troubleshooting guide
 
 ## Development Environment Setup
 

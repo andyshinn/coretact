@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coretact - Meshcore Contact Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .bot-icon-bg {
+            background-color: #5BB4F2;
+        }
+        .logo-circle {
+            border-radius: 50%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+    <div class="max-w-4xl mx-auto px-4">
+        <div class="text-center">
+            <!-- Bot Icon -->
+            <div class="inline-flex items-center justify-center w-32 h-32 bot-icon-bg rounded-full mb-8 shadow-lg p-4">
+                <img src="/assets/images/logo-square.png" alt="Coretact Logo" class="w-full h-full object-cover logo-circle">
+            </div>
+
+            <!-- Title and Description -->
+            <h1 class="text-5xl font-bold text-gray-900 mb-4">Coretact</h1>
+            <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+                Manage and share meshcore contact advertisements within your Discord servers.
+                Each server becomes a separate mesh of contacts for your community.
+            </p>
+
+            <!-- Invite Button -->
+            <a href="/invite"
+               class="inline-flex items-center px-8 py-4 text-lg font-semibold text-white bot-icon-bg rounded-lg shadow-lg hover:opacity-90 transition-opacity duration-200">
+                <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                </svg>
+                Add to Discord
+            </a>
+
+            <!-- Features -->
+            <div class="mt-16 grid md:grid-cols-3 gap-8 text-left">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="w-12 h-12 bot-icon-bg rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Easy Sharing</h3>
+                    <p class="text-gray-600">Share your meshcore contacts with a simple command. Add contacts directly from meshcore:// URLs.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="w-12 h-12 bot-icon-bg rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Powerful Search</h3>
+                    <p class="text-gray-600">Find contacts by name, type, or key prefix. Filter companions, repeaters, and room devices.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="w-12 h-12 bot-icon-bg rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Bulk Export</h3>
+                    <p class="text-gray-600">Download all contacts from your server as a single file for easy import into your devices.</p>
+                </div>
+            </div>
+
+            <!-- API Info -->
+            <div class="mt-16 bg-white p-8 rounded-lg shadow-md text-left">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Developer API</h2>
+                <p class="text-gray-600 mb-4">
+                    Access contacts programmatically via our REST API. All endpoints are available under <code class="bg-gray-100 px-2 py-1 rounded">/api/v1/</code>
+                </p>
+                <div class="space-y-2 text-sm font-mono bg-gray-50 p-4 rounded">
+                    <div><span class="text-green-600">GET</span> /api/v1/meshes</div>
+                    <div><span class="text-green-600">GET</span> /api/v1/meshes/{'{server_id}'}</div>
+                    <div><span class="text-green-600">GET</span> /api/v1/meshes/{'{server_id}'}/contacts</div>
+                    <div><span class="text-green-600">GET</span> /api/v1/meshes/{'{server_id}'}/contacts/{'{public_key}'}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-4">
+        <div class="max-w-4xl mx-auto px-4 text-center text-gray-600 text-sm">
+            <p>Coretact - <a href="https://github.com/andyshinn/coretact">GitHub</a></p>
+        </div>
+    </footer>
+</body>
+</html>

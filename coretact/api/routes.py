@@ -10,6 +10,21 @@ from coretact.models import Mesh
 from coretact.storage import AdvertStorage, ContactConverter, ContactFilter
 
 
+async def invite_redirect(request: web.Request) -> web.Response:
+    """Redirect to Discord bot invite URL.
+
+    Returns:
+        HTTP redirect to Discord invite URL or 404 if not configured
+    """
+    discord_invite_url = request.app.get("discord_invite_url")
+
+    if not discord_invite_url:
+        raise web.HTTPNotFound(reason="Discord invite URL not configured")
+
+    logger.info(f"Redirecting to Discord invite URL")
+    raise web.HTTPFound(discord_invite_url)
+
+
 async def health_check(request: web.Request) -> web.Response:
     """Health check endpoint.
 
@@ -387,7 +402,13 @@ def setup_routes(app: web.Application) -> None:
     Args:
         app: The aiohttp application
     """
+    # Discord invite redirect
+    app.router.add_get("/invite", invite_redirect)
+
+    # Health check
     app.router.add_get("/health", health_check)
+
+    # API routes
     app.router.add_get("/api/v1/mesh", list_all_meshes)
     app.router.add_get("/api/v1/mesh/{server_id}", get_mesh_info)
     app.router.add_get("/api/v1/mesh/{server_id}/contacts", get_mesh_contacts)

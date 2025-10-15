@@ -16,12 +16,29 @@ This is a vibe-coding project. Here be dragons!
 
 ## Setup
 
-### Prerequisites
+### Quick Start with Podman (Recommended)
+
+For production deployments, use Podman containers:
+
+```bash
+# Build the container
+podman build -t localhost/coretact:latest -f Containerfile .
+
+# Deploy with Podman Play
+podman play kube podman-play.yaml
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+
+### Development Setup
+
+#### Prerequisites
 
 - Python 3.12+
+- [uv](https://github.com/astral-sh/uv) package manager
 - A Discord bot token (get one from [Discord Developer Portal](https://discord.com/developers/applications))
 
-### Installation
+#### Installation
 
 1. Clone the repository:
 ```bash
@@ -29,11 +46,9 @@ git clone <repository-url>
 cd coretact
 ```
 
-2. Create a virtual environment and install dependencies:
+2. Install dependencies with uv:
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+uv sync
 ```
 
 3. Configure environment variables:
@@ -45,13 +60,13 @@ cp .env.default .env
 4. Run the bot or API server:
 ```bash
 # Run the Discord bot
-python -m coretact bot
+uv run python -m coretact bot
 
 # Run the Web API server
-python -m coretact api
+uv run python -m coretact api
 
 # Run the Web API server on a custom host/port
-python -m coretact api --host 127.0.0.1 --port 8080
+uv run python -m coretact api --host 127.0.0.1 --port 8080
 ```
 
 ## Discord Commands

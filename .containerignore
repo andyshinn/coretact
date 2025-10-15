@@ -1,0 +1,60 @@
+# Git
+# Note: .git is included for setuptools-scm version detection
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Runtime data (should never be in builds)
+storage/
+logs/
+*.log
+
+# Testing
+tests/
+pytest.ini
+.pytest_cache/
+
+# Environment files
+.env
+.env.*
+!.env.default
+
+# CI/CD
+.github/
+
+# Podman/Docker
+Containerfile
+.containerignore
+podman-play.yaml
+compose.yaml
