@@ -4,10 +4,9 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from time import time
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 from datafiles.decorators import datafile
-from datafiles.model import Model
 
 from coretact.log import logger
 
@@ -31,6 +30,7 @@ storage_base.mkdir(parents=True, exist_ok=True)
 STORAGE_BASE_PATH = str(storage_base)
 
 
+@dataclass
 @datafile(f"{STORAGE_BASE_PATH}/{{self.discord_server_id}}/adverts/{{self.public_key}}.json")
 class Advert:
     """Advertisement stored on disk.
@@ -62,6 +62,7 @@ class Advert:
             self.updated_at = time()
 
 
+@dataclass
 @datafile(f"{STORAGE_BASE_PATH}/{{self.discord_server_id}}/info.json")
 class Mesh:
     """Mesh configuration stored on disk.
@@ -110,3 +111,28 @@ class ContactsList:
     """Response containing a list of contacts."""
 
     contacts: list[Contact]
+
+
+@dataclass
+@datafile(f"{STORAGE_BASE_PATH}/{{self.discord_server_id}}/marks/{{self.discord_user_id}}.json")
+class Marks:
+    """User's marked contacts for a specific server.
+
+    Each user's marks are stored as a separate JSON file organized by server and user.
+    File path: storage/<server_id>/marks/<discord_user_id>.json
+
+    Contains a list of public keys that the user has marked for later download.
+    """
+
+    discord_server_id: str  # Discord guild ID
+    discord_user_id: str  # Discord user ID
+    public_keys: list[str]  # List of marked public keys (64-char hex strings)
+    created_at: float = 0.0  # Unix timestamp when marks file was created
+    updated_at: float = 0.0  # Unix timestamp of last update
+
+    def __post_init__(self):
+        """Set timestamps if not provided."""
+        if self.created_at == 0.0:
+            self.created_at = time()
+        if self.updated_at == 0.0:
+            self.updated_at = time()

@@ -62,6 +62,7 @@ The storage layer is organized into several classes with distinct responsibiliti
 
 - **`Advert`**: Internal storage model decorated with `@datafile`. File path: `storage/<server_id>/adverts/<public_key>.json`. Contains the full meshcore URL, parsed fields, timestamps, and the owner's discord_user_id (stored inside the JSON, not in the path).
 - **`Mesh`**: Server metadata model decorated with `@datafile`. File path: `storage/<server_id>/info.json`.
+- **`Marks`**: User marks model decorated with `@datafile`. File path: `storage/<server_id>/marks/<discord_user_id>.json`. Contains a list of public keys that a user has marked for later download.
 - **`Contact`**: API response model (not stored on disk). Contains the subset of fields exposed via the API.
 
 The `STORAGE_PATH` environment variable controls where files are stored (defaults to `./storage`).
@@ -81,7 +82,7 @@ The parser extracts: device type (companion/repeater/room), name, public key, fl
 - Built with `discord.py` using slash commands (app_commands)
 - All commands are grouped under `/coretact`
 - The bot automatically creates/updates mesh metadata when joining servers
-- Commands: `add`, `list`, `remove`, `search`, `download`, `info`
+- Commands: `add`, `list`, `remove`, `search`, `download`, `download-marked`, `info`
 - The cog pattern is used for organization (`CoretactCog` in [coretact/cogs/coretact/__init__.py](coretact/cogs/coretact/__init__.py))
 
 **Permission System:**
@@ -93,6 +94,16 @@ The parser extracts: device type (companion/repeater/room), name, public key, fl
   - `is_coretact_admin()`: Checks for "Coretact Admin" role
   - `check_advert_owner()`: Checks if user owns the advert
   - `is_coretact_admin_or_owner()`: Combined check (admin OR owner)
+
+**User Context Menus:**
+- **Show Contacts**: Right-click a user to see all their contact advertisements
+- **Mark Contact**: Right-click a user to toggle marking all their contacts for later download
+
+**Contact Marking System:**
+- Users can mark contacts from other users to create a personal collection
+- Marks are stored per-server in `storage/<server_id>/marks/<discord_user_id>.json`
+- Use `/coretact download-marked` to download all marked contacts as a JSON file
+- The marking system uses the `Marks` datafile model with a simple list of public keys
 
 ### Web API (`coretact/api/`)
 

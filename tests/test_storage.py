@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from coretact.models import Advert
+from coretact.models import Advert, Marks
 from coretact.storage import AdvertStorage, ContactConverter, ContactFilter, MeshStorage
 
 
@@ -319,3 +319,180 @@ def test_delete_nonexistent_mesh(temp_storage_dir):
     """Test deleting a mesh that doesn't exist."""
     success = MeshStorage.delete_mesh("999999999")
     assert success is False
+
+
+def test_create_marks(temp_storage_dir):
+    """Test creating a marks object."""
+    marks = Marks(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+        public_keys=["abc123", "def456"],
+    )
+
+    assert marks.discord_server_id == "123456789"
+    assert marks.discord_user_id == "987654321"
+    assert marks.public_keys == ["abc123", "def456"]
+    assert isinstance(marks.created_at, float)
+    assert isinstance(marks.updated_at, float)
+    assert marks.created_at > 0
+    assert marks.updated_at > 0
+
+
+def test_save_and_get_marks(temp_storage_dir):
+    """Test saving and retrieving marks."""
+    # Create and save marks
+    marks = Marks(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+        public_keys=["abc123", "def456"],
+    )
+    marks.datafile.save()
+
+    # Retrieve the marks
+    retrieved = Marks.objects.get_or_none(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+    )
+
+    assert retrieved is not None
+    assert retrieved.discord_server_id == "123456789"
+    assert retrieved.discord_user_id == "987654321"
+    assert retrieved.public_keys == ["abc123", "def456"]
+
+
+def test_add_mark(temp_storage_dir):
+    """Test adding a mark to the list."""
+    # Create and save marks
+    marks = Marks(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+        public_keys=["abc123"],
+    )
+    marks.datafile.save()
+
+    # Add a new mark
+    marks.public_keys.append("def456")
+    from time import time
+
+    marks.updated_at = time()
+    marks.datafile.save()
+
+    # Retrieve and verify
+    retrieved = Marks.objects.get_or_none(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+    )
+    assert retrieved is not None
+    assert len(retrieved.public_keys) == 2
+    assert "abc123" in retrieved.public_keys
+    assert "def456" in retrieved.public_keys
+
+
+def test_remove_mark(temp_storage_dir):
+    """Test removing a mark from the list."""
+    # Create and save marks
+    marks = Marks(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+        public_keys=["abc123", "def456", "ghi789"],
+    )
+    marks.datafile.save()
+
+    # Remove a mark
+    marks.public_keys.remove("def456")
+    from time import time
+
+    marks.updated_at = time()
+    marks.datafile.save()
+
+    # Retrieve and verify
+    retrieved = Marks.objects.get_or_none(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+    )
+    assert retrieved is not None
+    assert len(retrieved.public_keys) == 2
+    assert "abc123" in retrieved.public_keys
+    assert "ghi789" in retrieved.public_keys
+    assert "def456" not in retrieved.public_keys
+
+
+def test_toggle_mark(temp_storage_dir):
+    """Test toggling marks (add if not present, remove if present)."""
+    # Create and save marks
+    marks = Marks(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+        public_keys=["abc123"],
+    )
+    marks.datafile.save()
+
+    # Toggle existing mark (should remove)
+    if "abc123" in marks.public_keys:
+        marks.public_keys.remove("abc123")
+    else:
+        marks.public_keys.append("abc123")
+
+    from time import time
+
+    marks.updated_at = time()
+    marks.datafile.save()
+
+    retrieved = Marks.objects.get_or_none(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+    )
+    assert retrieved is not None
+    assert "abc123" not in retrieved.public_keys
+
+    # Toggle non-existing mark (should add)
+    if "def456" in retrieved.public_keys:
+        retrieved.public_keys.remove("def456")
+    else:
+        retrieved.public_keys.append("def456")
+
+    retrieved.updated_at = time()
+    retrieved.datafile.save()
+
+    retrieved2 = Marks.objects.get_or_none(
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+    )
+    assert retrieved2 is not None
+    assert "def456" in retrieved2.public_keys
+
+
+def test_get_nonexistent_marks(temp_storage_dir):
+    """Test getting marks that don't exist."""
+    marks = Marks.objects.get_or_none(
+        discord_server_id="999999999",
+        discord_user_id="888888888",
+    )
+    assert marks is None
+
+
+def test_marks_with_adverts(temp_storage_dir, sample_meshcore_url):
+    """Test marking actual adverts."""
+    # Create and save an advert
+    advert = AdvertStorage.create_advert_from_url(
+        meshcore_url=sample_meshcore_url,
+        discord_server_id="123456789",
+        discord_user_id="987654321",
+    )
+    advert.datafile.save()
+
+    # Create marks for a different user marking this advert
+    marks = Marks(
+        discord_server_id="123456789",
+        discord_user_id="111111111",  # Different user
+        public_keys=[advert.public_key],
+    )
+    marks.datafile.save()
+
+    # Verify we can retrieve the marked advert
+    retrieved_advert = AdvertStorage.get_advert(
+        public_key=advert.public_key,
+        discord_server_id="123456789",
+    )
+    assert retrieved_advert is not None
+    assert retrieved_advert.public_key in marks.public_keys

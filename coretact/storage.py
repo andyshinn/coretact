@@ -366,5 +366,5 @@ class MeshStorage:
         """
         from coretact.models import Mesh
 
-        all_meshes = Mesh.objects.all()
+        all_meshes = Mesh.objects.all()  # type: ignore[attr-defined]
         return list(all_meshes)
