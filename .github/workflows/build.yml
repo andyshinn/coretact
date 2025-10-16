@@ -113,14 +113,16 @@ jobs:
           fetch-depth: 0
 
       - name: Create Sentry release
-        uses: getsentry/action-release@v3
+        run: |
+          RELEASE="coretact@${{ needs.version.outputs.version }}"
+
+          sentry-cli releases new $RELEASE
+          sentry-cli releases set-commits --auto --ignore-missing $RELEASE
+          sentry-cli deploys new -e production -r $RELEASE
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: shinncloud
           SENTRY_PROJECT: coretact
-        with:
-          environment: production
-          version: coretact@${{ needs.version.outputs.version }}
 
       - name: Deploy with Podman Play
         run: deploy/deploy.sh
@@ -130,3 +132,12 @@ jobs:
           DISCORD_BOT_OWNER_ID: ${{ secrets.DISCORD_BOT_OWNER_ID }}
           DISCORD_INVITE_URL: ${{ secrets.DISCORD_INVITE_URL }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+
+      - name: Finalize Sentry release
+        run: |
+          RELEASE="coretact@${{ needs.version.outputs.version }}"
+          sentry-cli releases finalize $RELEASE
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: shinncloud
+          SENTRY_PROJECT: coretact
