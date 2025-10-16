@@ -51,6 +51,7 @@ build-backend = "setuptools.build_meta"
 packages = ["coretact"]
 
 [tool.setuptools_scm]
+local_scheme = "no-local-version"
 version_file = ".version"
 version_file_template = '{version}'
 
