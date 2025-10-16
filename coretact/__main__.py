@@ -70,60 +70,62 @@ def main():
         run_server(host=args.host, port=args.port)
 
     elif args.command == "decode":
-        from coretact.meshcore.parser import AdvertParser
+        from coretact.meshcore import decode_advert_to_dict
         import json
         from datetime import datetime
 
         try:
-            parsed = AdvertParser.parse(args.url)
+            # Use shared utility to decode
+            data = decode_advert_to_dict(args.url)
 
             if args.json:
-                # Output as JSON
-                data = {
-                    "format_type": parsed.format_type,
-                    "public_key": parsed.public_key,
-                    "type": parsed.type_name,
-                    "type_id": parsed.adv_type,
-                    "timestamp": parsed.timestamp,
-                    "signature": parsed.signature,
-                    "signature_valid": parsed.verify_signature(),
-                    "name": parsed.name,
-                    "latitude": parsed.latitude,
-                    "longitude": parsed.longitude,
-                    "battery_mv": parsed.battery,
-                    "temperature_c": parsed.temperature,
-                    "flags": parsed.flags,
+                # Output as JSON (with some field name adjustments for backwards compatibility)
+                output = {
+                    "format_type": data["format_type"],
+                    "public_key": data["public_key"],
+                    "type": data["type_name"],
+                    "type_id": data["adv_type"],
+                    "timestamp": data.get("timestamp"),
+                    "signature": data.get("signature"),
+                    "signature_valid": data.get("signature_valid"),
+                    "name": data["name"],
+                    "latitude": data.get("latitude"),
+                    "longitude": data.get("longitude"),
+                    "battery_mv": data.get("battery"),
+                    "temperature_c": data.get("temperature"),
+                    "flags": data.get("flags"),
                 }
-                print(json.dumps(data, indent=2))
+                print(json.dumps(output, indent=2))
             else:
                 # Human-readable output
                 print("=== Meshcore Advertisement ===")
-                print(f"Format: {parsed.format_type}")
-                print(f"Type: {parsed.type_name} ({parsed.adv_type})")
+                print(f"Format: {data['format_type']}")
+                print(f"Type: {data['type_name']} ({data['adv_type']})")
                 print()
-                print(f"Public Key: {parsed.public_key}")
+                print(f"Public Key: {data['public_key']}")
                 print()
-                if parsed.timestamp:
-                    dt = datetime.fromtimestamp(parsed.timestamp)
-                    print(f"Timestamp: {parsed.timestamp} ({dt.isoformat()})")
-                if parsed.signature:
-                    print(f"Signature: {parsed.signature}")
-                    is_valid = parsed.verify_signature()
+                if data.get("timestamp"):
+                    dt = datetime.fromtimestamp(data["timestamp"])
+                    print(f"Timestamp: {data['timestamp']} ({dt.isoformat()})")
+                if data.get("signature"):
+                    print(f"Signature: {data['signature']}")
+                    is_valid = data.get("signature_valid", False)
                     if is_valid:
                         print("Signature Status: ✓ VALID")
                     else:
                         print("Signature Status: ✗ INVALID")
                 print()
-                if parsed.name:
-                    print(f"Name: {parsed.name}")
-                if parsed.latitude is not None and parsed.longitude is not None:
-                    print(f"Location: {parsed.latitude}, {parsed.longitude}")
-                if parsed.battery is not None:
-                    print(f"Battery: {parsed.battery} mV")
-                if parsed.temperature is not None:
-                    print(f"Temperature: {parsed.temperature} °C")
+                if data["name"]:
+                    print(f"Name: {data['name']}")
+                if data.get("latitude") is not None and data.get("longitude") is not None:
+                    print(f"Location: {data['latitude']}, {data['longitude']}")
+                if data.get("battery") is not None:
+                    print(f"Battery: {data['battery']} mV")
+                if data.get("temperature") is not None:
+                    print(f"Temperature: {data['temperature']} °C")
                 print()
-                print(f"Flags: 0x{parsed.flags:02x} ({parsed.flags:08b}b)")
+                if data.get("flags") is not None:
+                    print(f"Flags: 0x{data['flags']:02x} ({data['flags']:08b}b)")
 
         except ValueError as e:
             print(f"Error: {e}", file=sys.stderr)

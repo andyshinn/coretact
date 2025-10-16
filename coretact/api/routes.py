@@ -8,6 +8,8 @@ from coretact.version import __version__
 from coretact.log import logger
 from coretact.models import Mesh
 from coretact.storage import AdvertStorage, ContactConverter, ContactFilter
+from coretact.meshcore import decode_advert_to_dict
+from coretact.api.app_keys import DISCORD_INVITE_URL_KEY, STORAGE_KEY
 
 
 async def invite_redirect(request: web.Request) -> web.Response:
@@ -16,12 +18,12 @@ async def invite_redirect(request: web.Request) -> web.Response:
     Returns:
         HTTP redirect to Discord invite URL or 404 if not configured
     """
-    discord_invite_url = request.app.get("discord_invite_url")
+    discord_invite_url = request.app.get(DISCORD_INVITE_URL_KEY)
 
     if not discord_invite_url:
         raise web.HTTPNotFound(reason="Discord invite URL not configured")
 
-    logger.info(f"Redirecting to Discord invite URL")
+    logger.info("Redirecting to Discord invite URL")
     raise web.HTTPFound(discord_invite_url)
 
 
@@ -46,7 +48,7 @@ async def get_mesh_contacts(request: web.Request) -> web.Response:
     Returns:
         JSON response with ContactsList
     """
-    storage: AdvertStorage = request.app["storage"]
+    storage: AdvertStorage = request.app[STORAGE_KEY]
     server_id = request.match_info["server_id"]
 
     # Parse query parameters
@@ -111,7 +113,7 @@ async def get_contact_by_key(request: web.Request) -> web.Response:
     Returns:
         JSON response with Contact including metadata
     """
-    storage: AdvertStorage = request.app["storage"]
+    storage: AdvertStorage = request.app[STORAGE_KEY]
     public_key = request.match_info["public_key"].lower()
 
     # Search for the public key across all servers
@@ -157,7 +159,7 @@ async def bulk_contacts(request: web.Request) -> web.Response:
     Returns:
         JSON response with ContactsList containing only matching contacts
     """
-    storage: AdvertStorage = request.app["storage"]
+    storage: AdvertStorage = request.app[STORAGE_KEY]
     server_id = request.match_info["server_id"]
 
     # Parse request body
@@ -244,7 +246,7 @@ async def get_user_contacts(request: web.Request) -> web.Response:
     Returns:
         JSON response with ContactsList
     """
-    storage: AdvertStorage = request.app["storage"]
+    storage: AdvertStorage = request.app[STORAGE_KEY]
     server_id = request.match_info["server_id"]
     user_id = request.match_info["user_id"]
 
@@ -286,7 +288,7 @@ async def get_mesh_stats(request: web.Request) -> web.Response:
     Returns:
         JSON response with mesh statistics
     """
-    storage: AdvertStorage = request.app["storage"]
+    storage: AdvertStorage = request.app[STORAGE_KEY]
     server_id = request.match_info["server_id"]
 
     # Get all adverts for the server
@@ -336,7 +338,7 @@ async def list_all_meshes(request: web.Request) -> web.Response:
     Returns:
         JSON response with list of all meshes
     """
-    storage: AdvertStorage = request.app["storage"]
+    storage: AdvertStorage = request.app[STORAGE_KEY]
 
     # Get all meshes
     all_meshes = Mesh.objects.all()  # type: ignore[attr-defined]
@@ -369,7 +371,7 @@ async def get_mesh_info(request: web.Request) -> web.Response:
     Returns:
         JSON response with mesh information including name, ID, and contact count
     """
-    storage: AdvertStorage = request.app["storage"]
+    storage: AdvertStorage = request.app[STORAGE_KEY]
     server_id = request.match_info["server_id"]
 
     # Get mesh metadata
@@ -396,6 +398,55 @@ async def get_mesh_info(request: web.Request) -> web.Response:
     return web.json_response(mesh_info)
 
 
+async def decode_advert(request: web.Request) -> web.Response:
+    """Decode a meshcore:// advertisement URL.
+
+    Request body:
+        {
+            "advert_url": "meshcore://..."
+        }
+
+    Returns:
+        JSON response with decoded advertisement data including:
+        - format_type: "advertisement" or "qr_contact"
+        - public_key: 32-byte public key (hex string)
+        - name: Device name (if present)
+        - adv_type: Advertisement type (0-4)
+        - type_name: Human-readable type name
+        - timestamp: Unix timestamp (binary format only)
+        - signature: Ed25519 signature (binary format only)
+        - signature_valid: Boolean indicating if signature is valid (binary format only)
+        - flags: Flags byte (binary format only)
+        - latitude: Latitude in degrees (if present)
+        - longitude: Longitude in degrees (if present)
+        - battery: Battery voltage in millivolts (if present)
+        - temperature: Temperature in Celsius (if present)
+    """
+    # Parse request body
+    try:
+        data = await request.json()
+    except Exception as e:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {e}")
+
+    # Validate request body
+    if "advert_url" not in data:
+        raise web.HTTPBadRequest(reason="Missing 'advert_url' field")
+
+    advert_url: str = data["advert_url"]
+
+    if not isinstance(advert_url, str):
+        raise web.HTTPBadRequest(reason="'advert_url' must be a string")
+
+    # Decode the advertisement URL using shared utility
+    try:
+        response_data = decode_advert_to_dict(advert_url)
+    except ValueError as e:
+        raise web.HTTPBadRequest(reason=f"Failed to parse advertisement: {e}")
+
+    logger.info(f"Decoded {response_data['format_type']} advertisement for public key {response_data['public_key']}")
+    return web.json_response(response_data)
+
+
 def setup_routes(app: web.Application) -> None:
     """Set up API routes.
 
@@ -416,3 +467,4 @@ def setup_routes(app: web.Application) -> None:
     app.router.add_post("/api/v1/mesh/{server_id}/contacts/bulk", bulk_contacts)
     app.router.add_get("/api/v1/mesh/{server_id}/user/{user_id}/contacts", get_user_contacts)
     app.router.add_get("/api/v1/mesh/{server_id}/stats", get_mesh_stats)
+    app.router.add_post("/api/v1/decode", decode_advert)

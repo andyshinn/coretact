@@ -1,40 +1,47 @@
 """
 MeshCore Advertisement Parser
 
-Parses meshcore:// URLs containing signed advertisement data.
+Parses meshcore:// URLs containing contact advertisements in two formats:
 
-Format (based on meshcore.js):
+1. Binary Advertisement Format (meshcore://[hex]):
+   Packet Header (2 bytes):
+     - Byte 0: Header byte
+       - Bits 0-1: Route type
+       - Bits 2-5: Payload type (4 = Node Advertisement)
+       - Bits 6-7: Version
+     - Byte 1: Path length
 
-Packet Header (2 bytes):
-  - Byte 0: Header byte
-    - Bits 0-1: Route type
-    - Bits 2-5: Payload type (4 = Node Advertisement)
-    - Bits 6-7: Version
-  - Byte 1: Path length
+   Path (variable, usually 0 bytes)
 
-Path (variable, usually 0 bytes)
+   Advertisement Payload:
+     - Public key (32 bytes)
+     - Timestamp (4 bytes, uint32 little-endian)
+     - Signature (64 bytes, Ed25519)
+     - App data (variable):
+       - Byte 0: Flags
+         - Bits 0-3: Advertisement type (0=None, 1=Chat/Companion, 2=Repeater, 3=Room)
+         - Bit 4 (0x10): Location present
+         - Bit 5 (0x20): Battery present
+         - Bit 6 (0x40): Temperature present
+         - Bit 7 (0x80): Name present
+       - Latitude (4 bytes, int32 LE) [if flag 0x10 set]
+       - Longitude (4 bytes, int32 LE) [if flag 0x10 set]
+       - Battery (2 bytes, uint16 LE, millivolts) [if flag 0x20 set]
+       - Temperature (2 bytes, int16 LE, celsius * 100) [if flag 0x40 set]
+       - Name (remaining bytes, UTF-8 string) [if flag 0x80 set]
 
-Advertisement Payload:
-  - Public key (32 bytes)
-  - Timestamp (4 bytes, uint32 little-endian)
-  - Signature (64 bytes, Ed25519)
-  - App data (variable):
-    - Byte 0: Flags
-      - Bits 0-3: Advertisement type (0=None, 1=Chat/Companion, 2=Repeater, 3=Room)
-      - Bit 4 (0x10): Location present
-      - Bit 5 (0x20): Battery present
-      - Bit 6 (0x40): Temperature present
-      - Bit 7 (0x80): Name present
-    - Latitude (4 bytes, int32 LE) [if flag 0x10 set]
-    - Longitude (4 bytes, int32 LE) [if flag 0x10 set]
-    - Battery (2 bytes, uint16 LE, millivolts) [if flag 0x20 set]
-    - Temperature (2 bytes, int16 LE, celsius * 100) [if flag 0x40 set]
-    - Name (remaining bytes, UTF-8 string) [if flag 0x80 set]
+2. QR Code Contact Format (meshcore://contact/add?...):
+   Query parameters:
+     - name: Device name (URL encoded, spaces as +)
+     - public_key: 32-byte public key (hex string)
+     - type: Advertisement type (0-4)
 """
 
 import struct
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import parse_qs, urlparse, unquote_plus
 
 from nacl.signing import VerifyKey
 from nacl.exceptions import BadSignatureError
@@ -154,8 +161,8 @@ class ParsedAdvert:
         return app_data
 
 
-class AdvertParser:
-    """Parser for MeshCore advertisement URLs."""
+class BaseAdvertParser(ABC):
+    """Base parser for MeshCore advertisement URLs."""
 
     PROTOCOL = "meshcore://"
 
@@ -168,18 +175,50 @@ class AdvertParser:
     }
 
     @classmethod
-    def parse(cls, meshcore_url: str) -> ParsedAdvert:
+    @abstractmethod
+    def can_parse(cls, url_without_protocol: str) -> bool:
         """
-        Parse a meshcore:// URL into structured advertisement data.
+        Check if this parser can handle the given URL format.
+
+        Args:
+            url_without_protocol: URL with protocol already stripped
+
+        Returns:
+            True if this parser can handle the format
+        """
+        pass
+
+    @classmethod
+    @abstractmethod
+    def parse_format(cls, meshcore_url: str, url_without_protocol: str) -> ParsedAdvert:
+        """
+        Parse the specific format into a ParsedAdvert.
 
         Args:
             meshcore_url: Full meshcore:// URL string
+            url_without_protocol: URL with protocol already stripped
 
         Returns:
-            ParsedAdvert object with all parsed fields
+            ParsedAdvert object with parsed fields
 
         Raises:
-            ValueError: If URL is invalid or cannot be parsed
+            ValueError: If URL format is invalid
+        """
+        pass
+
+    @classmethod
+    def validate_protocol(cls, meshcore_url: str) -> str:
+        """
+        Validate URL protocol and return the URL without protocol.
+
+        Args:
+            meshcore_url: Full URL string
+
+        Returns:
+            URL string with protocol stripped
+
+        Raises:
+            ValueError: If URL is invalid or has wrong protocol
         """
         if not meshcore_url or not isinstance(meshcore_url, str):
             raise ValueError("URL must be a non-empty string")
@@ -187,11 +226,29 @@ class AdvertParser:
         if not meshcore_url.startswith(cls.PROTOCOL):
             raise ValueError(f"URL must start with {cls.PROTOCOL}")
 
-        # Extract hex data
-        hex_data = meshcore_url[len(cls.PROTOCOL) :]
+        url_without_protocol = meshcore_url[len(cls.PROTOCOL) :]
 
-        if not hex_data:
+        if not url_without_protocol:
             raise ValueError("URL contains no data after protocol")
+
+        return url_without_protocol
+
+
+class BinaryAdvertParser(BaseAdvertParser):
+    """Parser for binary advertisement format (meshcore://[hex])."""
+
+    @classmethod
+    def can_parse(cls, url_without_protocol: str) -> bool:
+        """Check if this is a binary hex format."""
+        # Binary format is pure hex characters (or could be invalid hex)
+        # We return True for any non-QR format to provide better error messages
+        # for invalid hex data
+        return not url_without_protocol.startswith("contact/add?")
+
+    @classmethod
+    def parse_format(cls, meshcore_url: str, url_without_protocol: str) -> ParsedAdvert:
+        """Parse binary advertisement format."""
+        hex_data = url_without_protocol
 
         # Validate hex format
         if not all(c in "0123456789abcdefABCDEF" for c in hex_data):
@@ -251,7 +308,7 @@ class AdvertParser:
         """
 
         # Parse packet header
-        header = data[0]
+        _header = data[0]
         path_len = data[1]
 
         # Skip path (if any) to get to payload
@@ -344,6 +401,119 @@ class AdvertParser:
             battery=battery,
             temperature=temperature,
         )
+
+
+class QRCodeContactParser(BaseAdvertParser):
+    """Parser for QR code contact format (meshcore://contact/add?...)."""
+
+    @classmethod
+    def can_parse(cls, url_without_protocol: str) -> bool:
+        """Check if this is a QR code contact format."""
+        return url_without_protocol.startswith("contact/add?")
+
+    @classmethod
+    def parse_format(cls, meshcore_url: str, url_without_protocol: str) -> ParsedAdvert:
+        """Parse QR code contact format."""
+        # Parse the URL
+        parsed = urlparse(meshcore_url)
+
+        # Parse query parameters
+        query_params = parse_qs(parsed.query)
+
+        # Extract required fields
+        name_list = query_params.get("name", [])
+        public_key_list = query_params.get("public_key", [])
+        type_list = query_params.get("type", [])
+
+        if not name_list:
+            raise ValueError("Missing required parameter: name")
+        if not public_key_list:
+            raise ValueError("Missing required parameter: public_key")
+        if not type_list:
+            raise ValueError("Missing required parameter: type")
+
+        # Decode name (spaces are encoded as +)
+        name = unquote_plus(name_list[0])
+
+        # Validate and extract public key
+        public_key = public_key_list[0].lower()
+        if len(public_key) != 64:
+            raise ValueError(f"Invalid public key length: expected 64 hex chars, got {len(public_key)}")
+        if not all(c in "0123456789abcdef" for c in public_key):
+            raise ValueError("Public key contains invalid hex characters")
+
+        # Parse type
+        try:
+            adv_type = int(type_list[0])
+        except ValueError:
+            raise ValueError(f"Invalid type value: {type_list[0]}")
+
+        if adv_type < 0 or adv_type > 4:
+            raise ValueError(f"Type out of range: {adv_type} (expected 0-4)")
+
+        type_name = cls.TYPE_NAMES.get(adv_type, f"Unknown({adv_type})")
+
+        # QR code format has minimal data (no signature, timestamp, location, etc.)
+        return ParsedAdvert(
+            advert_string=meshcore_url,
+            raw_hex="",  # No raw hex for QR format
+            raw_bytes=b"",  # No raw bytes for QR format
+            format_type="qr_contact",
+            public_key=public_key,
+            adv_type=adv_type,
+            type_name=type_name,
+            flags=None,  # QR format doesn't have flags
+            name=name,
+            timestamp=None,  # QR format doesn't have timestamp
+            signature=None,  # QR format doesn't have signature
+            latitude=None,
+            longitude=None,
+            battery=None,
+            temperature=None,
+        )
+
+
+class AdvertParser:
+    """
+    Main parser for MeshCore advertisement URLs.
+
+    Automatically detects and delegates to the appropriate format-specific parser.
+    """
+
+    PROTOCOL = "meshcore://"
+
+    # List of format parsers to try (order matters - QR first since it's more specific)
+    PARSERS = [QRCodeContactParser, BinaryAdvertParser]
+
+    TYPE_NAMES = BaseAdvertParser.TYPE_NAMES
+
+    @classmethod
+    def parse(cls, meshcore_url: str) -> ParsedAdvert:
+        """
+        Parse a meshcore:// URL into structured advertisement data.
+
+        Automatically detects the format (binary or QR code) and delegates
+        to the appropriate parser.
+
+        Args:
+            meshcore_url: Full meshcore:// URL string
+
+        Returns:
+            ParsedAdvert object with all parsed fields
+
+        Raises:
+            ValueError: If URL is invalid or cannot be parsed
+        """
+        # Validate protocol (common for all formats)
+        url_without_protocol = BaseAdvertParser.validate_protocol(meshcore_url)
+
+        # Try each parser in order
+        for parser_class in cls.PARSERS:
+            if parser_class.can_parse(url_without_protocol):
+                return parser_class.parse_format(meshcore_url, url_without_protocol)
+
+        # If no parser matched, raise an error
+        raise ValueError(f"Unsupported URL format: {meshcore_url[:50]}...")
 
     @classmethod
     def validate(cls, meshcore_url: str) -> bool:

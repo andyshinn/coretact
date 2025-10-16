@@ -109,30 +109,6 @@ def test_delete_advert(temp_storage_dir, sample_meshcore_url):
     assert retrieved is None
 
 
-@pytest.mark.skip(reason="Datafiles Manager API has issues with temp directories")
-def test_list_user_adverts(temp_storage_dir, sample_meshcore_url):
-    """Test listing adverts for a user."""
-    # Create multiple adverts for the same user
-    for i in range(3):
-        # Modify the URL slightly to create different public keys
-        url = sample_meshcore_url[:-2] + f"0{i}"
-        advert = AdvertStorage.create_advert_from_url(
-            meshcore_url=url,
-            discord_server_id="123456789",
-            discord_user_id="987654321",
-        )
-        advert.datafile.save()
-
-    # List adverts
-    adverts = AdvertStorage.list_user_adverts(
-        discord_server_id="123456789",
-        discord_user_id="987654321",
-    )
-
-    assert len(adverts) == 3
-    assert all(advert.discord_user_id == "987654321" for advert in adverts)
-
-
 def test_contact_converter(temp_storage_dir, sample_meshcore_url):
     """Test converting an advert to a contact."""
     advert = AdvertStorage.create_advert_from_url(

@@ -9,18 +9,19 @@ WORKDIR /app
 # Install uv for fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy application code first (needed for setuptools-scm)
-COPY . /app
-
 # Set fallback version if git is not available
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${release:-0.0.0-dev}
+ENV UV_LINK_MODE=copy
+
+# Copy application code first (needed for setuptools-scm)
+COPY . /app
 
 # Install dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # Set environment variables
-ENV SENTRY_RELEASE=$release \
+ENV SENTRY_RELEASE=coretact@$release \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 

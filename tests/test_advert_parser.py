@@ -275,6 +275,133 @@ class TestDataTypes:
         assert parsed.timestamp == 67305985  # 0x04030201 in little-endian
 
 
+class TestQRCodeContactFormat:
+    """Tests for QR code contact format (meshcore://contact/add?...)."""
+
+    # Example QR code format URL
+    VALID_QR_CONTACT = (
+        "meshcore://contact/add?name=egrme.sh+Core&"
+        "public_key=55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d&"
+        "type=1"
+    )
+
+    EXPECTED_PUBLIC_KEY = "55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d"
+    EXPECTED_NAME = "egrme.sh Core"
+    EXPECTED_TYPE = 1
+
+    def test_parse_valid_qr_contact(self):
+        """Test parsing a valid QR code contact URL."""
+        parsed = AdvertParser.parse(self.VALID_QR_CONTACT)
+
+        assert parsed is not None
+        assert isinstance(parsed, ParsedAdvert)
+        assert parsed.format_type == "qr_contact"
+
+    def test_extract_public_key_from_qr(self):
+        """Test extracting public key from QR code format."""
+        parsed = AdvertParser.parse(self.VALID_QR_CONTACT)
+
+        assert parsed.public_key == self.EXPECTED_PUBLIC_KEY
+        assert len(parsed.public_key) == 64
+
+    def test_extract_name_from_qr(self):
+        """Test extracting name from QR code format (handles + as space)."""
+        parsed = AdvertParser.parse(self.VALID_QR_CONTACT)
+
+        assert parsed.name == self.EXPECTED_NAME
+
+    def test_extract_type_from_qr(self):
+        """Test extracting type from QR code format."""
+        parsed = AdvertParser.parse(self.VALID_QR_CONTACT)
+
+        assert parsed.adv_type == self.EXPECTED_TYPE
+        assert parsed.type_name == "Chat"
+
+    def test_qr_format_has_no_signature(self):
+        """Test that QR format doesn't have signature/timestamp fields."""
+        parsed = AdvertParser.parse(self.VALID_QR_CONTACT)
+
+        assert parsed.timestamp is None
+        assert parsed.signature is None
+        assert parsed.flags is None
+        assert parsed.latitude is None
+        assert parsed.longitude is None
+        assert parsed.battery is None
+        assert parsed.temperature is None
+
+    def test_qr_format_missing_name(self):
+        """Test QR format with missing name parameter."""
+        url = (
+            "meshcore://contact/add?public_key=55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d&type=1"
+        )
+        with pytest.raises(ValueError, match="Missing required parameter: name"):
+            AdvertParser.parse(url)
+
+    def test_qr_format_missing_public_key(self):
+        """Test QR format with missing public_key parameter."""
+        url = "meshcore://contact/add?name=Test&type=1"
+        with pytest.raises(ValueError, match="Missing required parameter: public_key"):
+            AdvertParser.parse(url)
+
+    def test_qr_format_missing_type(self):
+        """Test QR format with missing type parameter."""
+        url = "meshcore://contact/add?name=Test&public_key=55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d"
+        with pytest.raises(ValueError, match="Missing required parameter: type"):
+            AdvertParser.parse(url)
+
+    def test_qr_format_invalid_public_key_length(self):
+        """Test QR format with invalid public key length."""
+        url = "meshcore://contact/add?name=Test&public_key=1234&type=1"
+        with pytest.raises(ValueError, match="Invalid public key length"):
+            AdvertParser.parse(url)
+
+    def test_qr_format_invalid_public_key_chars(self):
+        """Test QR format with invalid characters in public key."""
+        url = "meshcore://contact/add?name=Test&public_key=" + "ZZ" * 32 + "&type=1"
+        with pytest.raises(ValueError, match="invalid hex characters"):
+            AdvertParser.parse(url)
+
+    def test_qr_format_invalid_type(self):
+        """Test QR format with invalid type value."""
+        url = "meshcore://contact/add?name=Test&public_key=55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d&type=abc"
+        with pytest.raises(ValueError, match="Invalid type value"):
+            AdvertParser.parse(url)
+
+    def test_qr_format_type_out_of_range(self):
+        """Test QR format with type out of valid range."""
+        url = "meshcore://contact/add?name=Test&public_key=55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d&type=10"
+        with pytest.raises(ValueError, match="Type out of range"):
+            AdvertParser.parse(url)
+
+    def test_qr_format_name_url_decoding(self):
+        """Test that QR format properly decodes URL-encoded names."""
+        # Test with + for spaces
+        url1 = "meshcore://contact/add?name=Test+Device+Name&public_key=55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d&type=1"
+        parsed1 = AdvertParser.parse(url1)
+        assert parsed1.name == "Test Device Name"
+
+        # Test with %20 for spaces
+        url2 = "meshcore://contact/add?name=Test%20Device%20Name&public_key=55365953947d253d213d7ab36df0be29ffb7a758049f657a6b32e1d00d66087d&type=1"
+        parsed2 = AdvertParser.parse(url2)
+        assert parsed2.name == "Test Device Name"
+
+    def test_qr_format_uppercase_public_key(self):
+        """Test that QR format normalizes uppercase public keys to lowercase."""
+        url = "meshcore://contact/add?name=Test&public_key=ABCD" + "EF01" * 15 + "&type=1"
+        parsed = AdvertParser.parse(url)
+        assert parsed.public_key == ("abcd" + "ef01" * 15)
+        assert parsed.public_key.islower()
+
+    def test_public_key_extraction_from_qr(self):
+        """Test the extract_public_key convenience method with QR format."""
+        public_key = AdvertParser.extract_public_key(self.VALID_QR_CONTACT)
+        assert public_key == self.EXPECTED_PUBLIC_KEY
+
+    def test_validate_method_with_qr(self):
+        """Test the validate convenience method with QR format."""
+        assert AdvertParser.validate(self.VALID_QR_CONTACT) is True
+
+
 class TestRealWorldExamples:
     """Tests using real-world advertisement examples."""
 
@@ -302,3 +429,28 @@ class TestRealWorldExamples:
         assert parsed1.name == parsed2.name
         assert parsed1.adv_type == parsed2.adv_type
         assert parsed1.flags == parsed2.flags
+
+
+class TestFormatDetection:
+    """Tests for automatic format detection."""
+
+    def test_detect_binary_format(self):
+        """Test that binary format is properly detected."""
+        # Minimal binary advertisement
+        binary_url = "meshcore://1100" + "00" * 32 + "00000000" + "00" * 64 + "01"
+        parsed = AdvertParser.parse(binary_url)
+        assert parsed.format_type == "advertisement"
+
+    def test_detect_qr_format(self):
+        """Test that QR code format is properly detected."""
+        qr_url = "meshcore://contact/add?name=Test&public_key=" + "11" * 32 + "&type=1"
+        parsed = AdvertParser.parse(qr_url)
+        assert parsed.format_type == "qr_contact"
+
+    def test_unsupported_format(self):
+        """Test that unsupported format raises appropriate error."""
+        unsupported_url = "meshcore://unknown/format"
+        # Non-QR formats are assumed to be binary hex, so invalid characters
+        # will trigger the hex validation error
+        with pytest.raises(ValueError, match="invalid hex characters"):
+            AdvertParser.parse(unsupported_url)

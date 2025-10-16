@@ -80,7 +80,7 @@ jobs:
           tags: ${{ steps.set_tags.outputs.tags }}
           containerfiles: ./Containerfile
           build-args: |
-            release=coretact@${{ steps.extract_branch.outputs.branch_name }}
+            release=${{ steps.extract_branch.outputs.branch_name }}
 
       - name: Push image
         uses: redhat-actions/push-to-registry@v2

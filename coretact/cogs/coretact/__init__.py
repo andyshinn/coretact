@@ -440,13 +440,15 @@ class CoretactCog(commands.GroupCog, name="coretact"):
         )
 
         # Apply filters
-        filtered_adverts = list(ContactFilter.filter_adverts(
-            all_adverts,
-            type=type_id,
-            key_prefix=key_prefix,
-            name=name,
-            user_id=user_id,
-        ))
+        filtered_adverts = list(
+            ContactFilter.filter_adverts(
+                all_adverts,
+                type=type_id,
+                key_prefix=key_prefix,
+                name=name,
+                user_id=user_id,
+            )
+        )
 
         if not filtered_adverts:
             await interaction.response.send_message(
@@ -544,13 +546,15 @@ class CoretactCog(commands.GroupCog, name="coretact"):
         )
 
         # Apply filters
-        filtered_adverts = list(ContactFilter.filter_adverts(
-            all_adverts,
-            type=type_id,
-            key_prefix=key_prefix,
-            name=name,
-            user_id=user_id,
-        ))
+        filtered_adverts = list(
+            ContactFilter.filter_adverts(
+                all_adverts,
+                type=type_id,
+                key_prefix=key_prefix,
+                name=name,
+                user_id=user_id,
+            )
+        )
 
         if not filtered_adverts:
             await interaction.response.send_message(
@@ -687,9 +691,7 @@ class CoretactCog(commands.GroupCog, name="coretact"):
         embed.set_footer(text="Use /coretact marks download to download all marked contacts")
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        logger.info(
-            f"User {interaction.user.id} marked {marked_count} contacts in guild {interaction.guild_id}"
-        )
+        logger.info(f"User {interaction.user.id} marked {marked_count} contacts in guild {interaction.guild_id}")
 
     @marks_group.command(name="remove", description="Unmark one or more contact public keys")
     @app_commands.describe(public_keys="Comma-separated list of public keys to unmark (e.g., abc123...,def456...)")
@@ -772,9 +774,7 @@ class CoretactCog(commands.GroupCog, name="coretact"):
         embed.set_footer(text="Use /coretact marks download to download all marked contacts")
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        logger.info(
-            f"User {interaction.user.id} unmarked {unmarked_count} contacts in guild {interaction.guild_id}"
-        )
+        logger.info(f"User {interaction.user.id} unmarked {unmarked_count} contacts in guild {interaction.guild_id}")
 
     @marks_group.command(name="download", description="Download all contacts you've marked")
     async def marks_download(self, interaction: Interaction):

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from aiohttp import web
 
+from coretact.api.app_keys import DISCORD_INVITE_URL_KEY, STORAGE_KEY
 from coretact.api.middleware import cors_middleware, error_middleware, logging_middleware
 from coretact.api.routes import setup_routes
 from coretact.log import logger
@@ -27,11 +28,13 @@ def create_app() -> web.Application:
     )
 
     # Store configuration in app
-    app["discord_invite_url"] = os.getenv("DISCORD_INVITE_URL")
+    discord_invite = os.getenv("DISCORD_INVITE_URL")
+    if discord_invite:
+        app[DISCORD_INVITE_URL_KEY] = discord_invite
 
     # Initialize storage
     storage = AdvertStorage()
-    app["storage"] = storage
+    app[STORAGE_KEY] = storage
 
     # Set up routes
     setup_routes(app)
@@ -48,7 +51,11 @@ def create_app() -> web.Application:
         logger.info(f"Serving assets directory from {assets_dir}")
 
     # Serve index.html at root
-    app.router.add_get("/", lambda request: web.FileResponse(static_dir / "index.html"))
+    async def serve_index(_: web.Request) -> web.FileResponse:
+        """Serve the index.html landing page."""
+        return web.FileResponse(static_dir / "index.html")
+
+    app.router.add_get("/", serve_index)
 
     logger.info("Coretact API application created")
     return app
