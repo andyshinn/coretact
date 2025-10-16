@@ -7,6 +7,7 @@
 #   IMAGE                  - Container image to deploy (default: ghcr.io/andyshinn/coretact:latest)
 #   DISCORD_BOT_TOKEN      - Required: Discord bot token
 #   DISCORD_BOT_OWNER_ID   - Optional: Discord bot owner ID
+#   DISCORD_INVITE_URL     - Optional: Discord OAuth2 invite URL for landing page
 #   SENTRY_DSN             - Optional: Sentry DSN for error tracking
 #   LOGURU_LEVEL           - Optional: Log level (default: INFO)
 #   TZ                     - Optional: Timezone (default: UTC)
@@ -23,6 +24,7 @@ POD_NAME="coretact"
 export IMAGE="${IMAGE:-ghcr.io/andyshinn/coretact:latest}"
 export LOGURU_LEVEL="${LOGURU_LEVEL:-INFO}"
 export TZ="${TZ:-UTC}"
+export DISCORD_INVITE_URL="${DISCORD_INVITE_URL:-}"
 export SENTRY_DSN="${SENTRY_DSN:-}"
 
 # Validate required environment variables
@@ -36,17 +38,18 @@ echo "    Image: $IMAGE"
 echo "    Pod: $POD_NAME"
 echo ""
 
-# Create ConfigMap with Discord credentials
-echo "==> Creating ConfigMap with credentials..."
+# Create ConfigMap with secrets
+echo "==> Creating ConfigMap with secrets..."
 cat > "$CONFIGMAP_FILE" <<EOF
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: coretact-discord-secrets
+  name: coretact-secrets
 data:
   DISCORD_BOT_TOKEN: "${DISCORD_BOT_TOKEN}"
   DISCORD_BOT_OWNER_ID: "${DISCORD_BOT_OWNER_ID:-}"
+  SENTRY_DSN: "${SENTRY_DSN:-}"
 EOF
 
 # Create play file with substituted environment variables

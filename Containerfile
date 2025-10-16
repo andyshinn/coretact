@@ -2,8 +2,6 @@
 # Supports both Discord bot and Web API modes
 FROM public.ecr.aws/docker/library/python:3.12.9
 
-ARG release
-
 WORKDIR /app
 
 # Install uv for fast dependency management

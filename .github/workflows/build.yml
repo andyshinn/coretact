@@ -12,6 +12,33 @@ on:
       - published
 
 jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Generate version file
+        run: uv sync
+
+      - name: Get version from .version file
+        id: get_version
+        run: |
+          VERSION=$(cat .version)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Generated version: ${VERSION}"
+
   test:
     runs-on: ubuntu-24.04
     steps:
@@ -35,6 +62,7 @@ jobs:
 
   build:
     runs-on: self-hosted
+    needs: version
 
     permissions:
       contents: read
@@ -47,26 +75,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract branch name
-        id: extract_branch
-        run: |
-          if [[ "${GITHUB_REF}" == refs/heads/* ]]; then
-            BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          elif [[ "${GITHUB_REF}" == refs/pull/* ]]; then
-            BRANCH_NAME=$(echo ${GITHUB_REF} | sed 's#refs/pull/##; s#/merge##')
-          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            BRANCH_NAME=${GITHUB_REF#refs/tags/}
-          else
-            BRANCH_NAME=${GITHUB_REF}
-          fi
-          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
-          echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
-
       - name: Set image tags
         id: set_tags
         run: |
-          TAGS="ghcr.io/${{ github.repository }}:${{ github.sha }} ghcr.io/${{ github.repository }}:$BRANCH_NAME"
-          if [ "$BRANCH_NAME" == "main" ]; then
+          TAGS="ghcr.io/${{ github.repository }}:${{ github.sha }} ghcr.io/${{ github.repository }}:${{ needs.version.outputs.version }}"
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
             TAGS="$TAGS ghcr.io/${{ github.repository }}:latest"
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
@@ -79,8 +92,6 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.set_tags.outputs.tags }}
           containerfiles: ./Containerfile
-          build-args: |
-            release=${{ steps.extract_branch.outputs.branch_name }}
 
       - name: Push image
         uses: redhat-actions/push-to-registry@v2
@@ -92,6 +103,7 @@ jobs:
   deploy:
     runs-on: self-hosted
     needs:
+      - version
       - build
       - test
     if: github.event_name == 'release' && github.event.action == 'published'
@@ -100,9 +112,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Create Sentry release
+        uses: getsentry/action-release@v3
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: shinncloud
+          SENTRY_PROJECT: coretact
+        with:
+          environment: production
+          version: coretact@${{ needs.version.outputs.version }}
+
       - name: Deploy with Podman Play
         run: deploy/deploy.sh
         env:
-          IMAGE: ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}
+          IMAGE: ghcr.io/${{ github.repository }}:${{ needs.version.outputs.version }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_BOT_OWNER_ID: ${{ secrets.DISCORD_BOT_OWNER_ID }}
+          DISCORD_INVITE_URL: ${{ secrets.DISCORD_INVITE_URL }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}

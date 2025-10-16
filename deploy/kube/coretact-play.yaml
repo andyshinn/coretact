@@ -49,9 +49,9 @@ spec:
         - coretact
         - bot
       envFrom:
-        # Load Discord credentials from ConfigMap (deploy with --configmap)
+        # Load secrets from ConfigMap (deploy with --configmap)
         - configMapRef:
-            name: coretact-discord-secrets
+            name: coretact-secrets
             optional: false
       env:
         # Bot configuration
@@ -66,13 +66,9 @@ spec:
 
         # Logging
         - name: LOGURU_LEVEL
-          value: INFO
+          value: ${LOGURU_LEVEL}
         - name: TZ
-          value: UTC
-
-        # Sentry (optional)
-        - name: SENTRY_DSN
-          value: ""
+          value: ${TZ}
 
       volumeMounts:
         - name: coretact-storage
@@ -102,12 +98,21 @@ spec:
         - "0.0.0.0"
         - --port
         - "8080"
+      envFrom:
+        # Load secrets from ConfigMap (deploy with --configmap)
+        - configMapRef:
+            name: coretact-secrets
+            optional: false
       env:
         # Web API Configuration
         - name: WEB_API_HOST
           value: "0.0.0.0"
         - name: WEB_API_PORT
           value: "8080"
+
+        # Discord Configuration
+        - name: DISCORD_INVITE_URL
+          value: ${DISCORD_INVITE_URL}
 
         # Storage Configuration (shared with bot)
         - name: STORAGE_PATH
@@ -117,13 +122,9 @@ spec:
 
         # Logging
         - name: LOGURU_LEVEL
-          value: INFO
+          value: ${LOGURU_LEVEL}
         - name: TZ
-          value: UTC
-
-        # Sentry (Optional)
-        - name: SENTRY_DSN
-          value: ""
+          value: ${TZ}
 
       ports:
         - containerPort: 8080

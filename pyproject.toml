@@ -50,6 +50,10 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 packages = ["coretact"]
 
+[tool.setuptools_scm]
+version_file = ".version"
+version_file_template = '{version}'
+
 [tool.ruff]
 line-length = 120
 exclude = ["coretact/version.py"]

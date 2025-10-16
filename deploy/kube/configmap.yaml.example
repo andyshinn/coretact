@@ -1,7 +1,7 @@
 ---
-# Coretact ConfigMap - Sensitive Discord Credentials
+# Coretact ConfigMap - Sensitive Credentials
 #
-# Copy this file to configmap.yaml and fill in your Discord credentials:
+# Copy this file to configmap.yaml and fill in your credentials:
 #   cp configmap.yaml.example configmap.yaml
 #   vi configmap.yaml  # Edit and add your tokens
 #
@@ -13,7 +13,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: coretact-discord-secrets
+  name: coretact-secrets
 data:
   # =============================================================================
   # REQUIRED: Discord Bot Token
@@ -27,3 +27,10 @@ data:
   # Your Discord user ID (enables owner-only commands)
   # Right-click your username in Discord (Developer Mode) and select "Copy ID"
   DISCORD_BOT_OWNER_ID: ""  # Optional: Your user ID (e.g., "123456789012345678")
+
+  # =============================================================================
+  # Optional: Sentry DSN
+  # =============================================================================
+  # Sentry Data Source Name for error tracking
+  # Get from: Sentry project → Settings → Client Keys (DSN)
+  SENTRY_DSN: ""  # Optional: Your Sentry DSN (e.g., "https://...@sentry.io/...")

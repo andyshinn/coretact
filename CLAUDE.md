@@ -126,7 +126,37 @@ Optional:
 - `LOG_LEVEL`: Logging level (default: `INFO`)
 - `AUTO_SYNC_COMMANDS`: Auto-sync Discord commands on startup (default: `true`)
 
+Sentry (optional):
+- `SENTRY_DSN`: Sentry project DSN for error tracking
+- `SENTRY_TRACES_SAMPLE_RATE`: Transaction sampling rate (default: `0.1` = 10%)
+- `SENTRY_PROFILES_SAMPLE_RATE`: Profiling sampling rate (default: `0.1` = 10%)
+- `SENTRY_AUTH_TOKEN`: Auth token for CI/CD release tracking (GitHub Actions only)
+
 See [.env.default](.env.default) for a template.
+
+### Error Tracking with Sentry
+
+Sentry is integrated for error tracking and performance monitoring:
+
+**Initialization:** Sentry is initialized in [coretact/__init__.py](coretact/__init__.py) at module import time, ensuring all errors are captured.
+
+**Privacy Settings:**
+- `send_default_pii=False`: Prevents personally identifiable information from being sent
+- `EventScrubber`: Redacts sensitive environment variables from error reports
+- Custom denylist includes: `DISCORD_BOT_TOKEN`, `DISCORD_BOT_OWNER_ID`
+
+**Release Tracking:**
+- Release information comes from `coretact.__version__` (set via setuptools-scm from git tags)
+- Release format: `coretact@<version>` (e.g., `coretact@1.0.0`)
+- Errors are automatically tagged with the release version when sent to Sentry
+- This allows filtering and tracking issues by version in the Sentry dashboard
+
+**GitHub Actions Integration:**
+- The `deploy` job in [.github/workflows/build.yml](.github/workflows/build.yml) creates Sentry releases using `getsentry/action-release@v1`
+- Requires `SENTRY_AUTH_TOKEN` secret configured in GitHub repository settings
+- Automatically creates release, links commits, and registers production deployment
+- Only runs on release publish events
+- Release version matches the package version from `.version` file
 
 ## Key Design Patterns
 

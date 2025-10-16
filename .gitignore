@@ -268,3 +268,6 @@ pip-selfcheck.json
 
 # Affinity Locks
 *~lock~
+
+# Our custom version file for inspecting version with CLI tools
+.version
